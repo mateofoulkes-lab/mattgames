@@ -1,17 +1,35 @@
 from pathlib import Path
-from PIL import Image, ImageFile
+from PIL import Image
 import json
-
-ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'portraitspng'
 OUT = ROOT / 'portraits'
 OUT.mkdir(parents=True, exist_ok=True)
 
+MAPPING = {
+    '1.jpg': ['monja-gladys', 'kenji-turista', 'braian-9', 'actor-dramatico'],
+    '2.jpg': ['chef-bigotes', 'taxista-canchero', 'influencer-fachero', 'mago-elegante'],
+    '3.jpg': ['policia-retirado', 'profesor-loquito', 'metalero', 'senora-cheta'],
+    '4.jpg': ['gamer-feliz', 'astrologo-mistico', 'runner-intenso', 'vendedor-ambulante'],
+    '5.jpg': ['empresario-sonrisa', 'tia-conspiranoica', 'dj-neon', 'personal-trainer'],
+    '6.jpg': ['cosplayer-heroina', 'jubilado-aventurero', 'guia-turismo', 'cantante-fiesta'],
+}
+
+# Borra únicamente restos generados por esta herramienta. Los portraits manuales
+# con otros nombres no se tocan.
+generated_names = {name for names in MAPPING.values() for name in names}
+for old in OUT.glob('*.jpg'):
+    if old.stem in generated_names or old.stem.replace('-', '').isdigit():
+        old.unlink()
+
 manifest = []
-for src in sorted([*SRC.glob('*.png'), *SRC.glob('*.jpg'), *SRC.glob('*.jpeg')]):
-    names = src.stem.split('__')
+for filename, names in MAPPING.items():
+    src = SRC / filename
+    if not src.exists():
+        print(f'Skipping missing source: {filename}')
+        continue
+
     image = Image.open(src).convert('RGB')
     w, h = image.size
     boxes = [
@@ -20,12 +38,21 @@ for src in sorted([*SRC.glob('*.png'), *SRC.glob('*.jpg'), *SRC.glob('*.jpeg')])
         (0, h // 2, w // 2, h),
         (w // 2, h // 2, w, h),
     ]
-    for i, box in enumerate(boxes, 1):
-        name = names[i - 1] if len(names) == 4 else f'{src.stem}-{i}'
-        out = OUT / f'{name}.jpg'
-        crop = image.crop(box).resize((512, 512), Image.Resampling.LANCZOS)
-        crop.save(out, 'JPEG', quality=88, optimize=True, progressive=True)
-        manifest.append({'source': src.name, 'slot': i, 'name': name, 'file': f'portraits/{out.name}'})
 
-(ROOT / 'avatar-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-print(f'Processed {len(manifest)} portraits from {len(set(x["source"] for x in manifest))} mosaics')
+    for slot, (name, box) in enumerate(zip(names, boxes), 1):
+        out = OUT / f'{name}.jpg'
+        crop = image.crop(box)
+        crop.save(out, 'JPEG', quality=96, subsampling=0, optimize=True)
+        manifest.append({
+            'source': filename,
+            'slot': slot,
+            'name': name,
+            'size': list(crop.size),
+            'file': f'portraits/{out.name}'
+        })
+
+(ROOT / 'avatar-manifest.json').write_text(
+    json.dumps(manifest, ensure_ascii=False, indent=2),
+    encoding='utf-8'
+)
+print(f'Processed {len(manifest)} high-quality portraits from {len(MAPPING)} mosaics')
