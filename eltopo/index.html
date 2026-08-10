@@ -8,20 +8,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=0.2.1" />
+  <link rel="stylesheet" href="./styles.css?v=0.3.0" />
 </head>
 <body>
-  <div id="versionStatic" style="position:fixed;right:8px;bottom:6px;z-index:99999;font:500 10px/1.2 Inter,system-ui,sans-serif;color:rgba(255,255,255,.72);background:rgba(17,27,33,.72);padding:3px 6px;border-radius:8px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.18)">v0.2.1</div>
+  <div id="versionBadge" style="position:fixed;right:8px;bottom:6px;z-index:99999;font:600 10px/1.2 Inter,system-ui,sans-serif;color:rgba(255,255,255,.82);background:rgba(17,27,33,.82);padding:4px 7px;border-radius:8px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.18)">v0.3.0 · 0 peers</div>
   <div id="app">
     <section id="landing" class="landing screen active">
       <div class="landing-card">
         <div class="brand-mark">🐀</div>
         <h1>El Topo</h1>
         <p class="tagline">Todos tienen algo que ocultar. Solo uno saca capturas.</p>
-
         <label class="field-label" for="playerName">Tu nombre</label>
         <input id="playerName" class="text-input" maxlength="20" autocomplete="name" placeholder="Ej. Mateo" />
-
         <button id="createRoomBtn" class="primary-btn">Crear sala</button>
         <div class="divider"><span>o</span></div>
         <div class="join-row">
@@ -69,12 +67,9 @@
             <button class="icon-btn" id="chatMenuBtn" title="Menú">⋮</button>
           </div>
         </header>
-
         <div id="gameBanner" class="game-banner hidden"></div>
         <div id="messages" class="messages" aria-live="polite"></div>
-
         <div id="actionTray" class="action-tray hidden"></div>
-
         <footer id="composer" class="composer">
           <button class="icon-btn composer-icon">☺</button>
           <button class="icon-btn composer-icon">＋</button>
@@ -128,9 +123,8 @@
         <button id="closeRoleBtn" class="primary-btn">Entendido</button>
       </div>
     </div>
-
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script type="module" src="./app.js?v=0.2.1"></script>
+  <script type="module" src="./app.js?v=0.3.0"></script>
 </body>
 </html>
