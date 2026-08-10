@@ -1,6 +1,8 @@
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageFile
 import json
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'portraitspng'
