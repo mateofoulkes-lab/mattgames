@@ -1,1 +1,1 @@
-import './game-main.js?v=0.4.0';
+import './game-v050.js?v=0.5.0';
