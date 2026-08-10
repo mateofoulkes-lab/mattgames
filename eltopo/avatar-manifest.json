@@ -1,0 +1,74 @@
+[
+  {
+    "source": "chef-bigotes__taxista-canchero__influencer-fachero__mago-elegante.jpg",
+    "slot": 1,
+    "name": "chef-bigotes",
+    "file": "portraits/chef-bigotes.jpg"
+  },
+  {
+    "source": "chef-bigotes__taxista-canchero__influencer-fachero__mago-elegante.jpg",
+    "slot": 2,
+    "name": "taxista-canchero",
+    "file": "portraits/taxista-canchero.jpg"
+  },
+  {
+    "source": "chef-bigotes__taxista-canchero__influencer-fachero__mago-elegante.jpg",
+    "slot": 3,
+    "name": "influencer-fachero",
+    "file": "portraits/influencer-fachero.jpg"
+  },
+  {
+    "source": "chef-bigotes__taxista-canchero__influencer-fachero__mago-elegante.jpg",
+    "slot": 4,
+    "name": "mago-elegante",
+    "file": "portraits/mago-elegante.jpg"
+  },
+  {
+    "source": "monja-gladys__kenji-turista__braian-9__actor-dramatico.jpg",
+    "slot": 1,
+    "name": "monja-gladys",
+    "file": "portraits/monja-gladys.jpg"
+  },
+  {
+    "source": "monja-gladys__kenji-turista__braian-9__actor-dramatico.jpg",
+    "slot": 2,
+    "name": "kenji-turista",
+    "file": "portraits/kenji-turista.jpg"
+  },
+  {
+    "source": "monja-gladys__kenji-turista__braian-9__actor-dramatico.jpg",
+    "slot": 3,
+    "name": "braian-9",
+    "file": "portraits/braian-9.jpg"
+  },
+  {
+    "source": "monja-gladys__kenji-turista__braian-9__actor-dramatico.jpg",
+    "slot": 4,
+    "name": "actor-dramatico",
+    "file": "portraits/actor-dramatico.jpg"
+  },
+  {
+    "source": "policia-retirado__profesor-loquito__metalero__senora-cheta.jpg",
+    "slot": 1,
+    "name": "policia-retirado",
+    "file": "portraits/policia-retirado.jpg"
+  },
+  {
+    "source": "policia-retirado__profesor-loquito__metalero__senora-cheta.jpg",
+    "slot": 2,
+    "name": "profesor-loquito",
+    "file": "portraits/profesor-loquito.jpg"
+  },
+  {
+    "source": "policia-retirado__profesor-loquito__metalero__senora-cheta.jpg",
+    "slot": 3,
+    "name": "metalero",
+    "file": "portraits/metalero.jpg"
+  },
+  {
+    "source": "policia-retirado__profesor-loquito__metalero__senora-cheta.jpg",
+    "slot": 4,
+    "name": "senora-cheta",
+    "file": "portraits/senora-cheta.jpg"
+  }
+]
