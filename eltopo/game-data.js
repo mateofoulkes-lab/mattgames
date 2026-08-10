@@ -1,6 +1,6 @@
 export const APP_ID='mattgames-eltopo-v1';
 export const MAX_PLAYERS=12;
-export const MIN_PLAYERS=3;
+export const MIN_PLAYERS=2;
 export const THEMES={
  escape:{name:'Aficionados a las salas de escape',antagonist:'Dueño de cadena de salas de escape',situations:[
   'Una sala muy conocida copió casi entero el acertijo estrella de una sala independiente. ¿Lo denunciamos públicamente o lo hablamos en privado?',
