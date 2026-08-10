@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#00a884" />
+  <title>El Topo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <section id="landing" class="landing screen active">
+      <div class="landing-card">
+        <div class="brand-mark">🐀</div>
+        <h1>El Topo</h1>
+        <p class="tagline">Todos tienen algo que ocultar. Solo uno saca capturas.</p>
+
+        <label class="field-label" for="playerName">Tu nombre</label>
+        <input id="playerName" class="text-input" maxlength="20" autocomplete="name" placeholder="Ej. Mateo" />
+
+        <button id="createRoomBtn" class="primary-btn">Crear sala</button>
+        <div class="divider"><span>o</span></div>
+        <div class="join-row">
+          <input id="roomCodeInput" class="text-input room-code-input" maxlength="8" autocapitalize="characters" placeholder="CÓDIGO" />
+          <button id="joinRoomBtn" class="secondary-btn">Unirme</button>
+        </div>
+        <p id="landingError" class="error-text"></p>
+      </div>
+    </section>
+
+    <section id="messenger" class="messenger screen">
+      <aside class="sidebar">
+        <header class="sidebar-topbar">
+          <div class="me-avatar" id="meAvatar">M</div>
+          <div class="sidebar-actions">
+            <button class="icon-btn" title="Estado">◉</button>
+            <button class="icon-btn" title="Nuevo chat">✚</button>
+            <button class="icon-btn" id="sideMenuBtn" title="Menú">⋮</button>
+          </div>
+        </header>
+        <div class="search-wrap"><span>⌕</span><input placeholder="Buscar un chat" disabled /></div>
+        <div class="chat-list">
+          <button class="chat-list-item selected">
+            <div class="group-avatar">🔐</div>
+            <div class="chat-list-copy">
+              <div class="chat-list-title-row"><strong id="sidebarGroupName">Aficionados a salas de escape</strong><span id="sidebarTime"></span></div>
+              <div class="chat-list-preview"><span id="sidebarPreview">Sala privada · El Topo</span></div>
+            </div>
+          </button>
+        </div>
+      </aside>
+
+      <main class="chat-pane">
+        <header class="chat-topbar">
+          <button id="mobileBackBtn" class="icon-btn mobile-only">‹</button>
+          <button id="groupInfoBtn" class="group-head">
+            <div class="group-avatar small">🔐</div>
+            <div class="group-head-copy">
+              <strong id="groupName">Aficionados a salas de escape</strong>
+              <span id="groupSubtitle">Conectando…</span>
+            </div>
+          </button>
+          <div class="chat-actions">
+            <button class="icon-btn" title="Buscar">⌕</button>
+            <button class="icon-btn" id="chatMenuBtn" title="Menú">⋮</button>
+          </div>
+        </header>
+
+        <div id="gameBanner" class="game-banner hidden"></div>
+        <div id="messages" class="messages" aria-live="polite"></div>
+
+        <div id="actionTray" class="action-tray hidden"></div>
+
+        <footer id="composer" class="composer">
+          <button class="icon-btn composer-icon">☺</button>
+          <button class="icon-btn composer-icon">＋</button>
+          <input id="messageInput" maxlength="500" placeholder="Escribe un mensaje" />
+          <button id="sendBtn" class="send-btn" title="Enviar">➤</button>
+        </footer>
+      </main>
+
+      <aside id="infoPanel" class="info-panel">
+        <header class="info-panel-head"><button id="closeInfoBtn" class="icon-btn">×</button><span>Info. del grupo</span></header>
+        <div class="info-hero">
+          <div class="group-avatar huge">🔐</div>
+          <h2 id="infoGroupName">Aficionados a salas de escape</h2>
+          <p id="infoCount">1 participante</p>
+        </div>
+        <div class="info-section">
+          <span class="section-kicker">CÓDIGO DE SALA</span>
+          <div class="room-code-card"><strong id="roomCodeDisplay">----</strong><button id="copyCodeBtn">Copiar</button></div>
+        </div>
+        <div id="hostSettings" class="info-section host-settings hidden">
+          <span class="section-kicker">CONFIGURACIÓN</span>
+          <label>Tema del grupo
+            <select id="themeSelect">
+              <option value="escape" selected>Grupo de aficionados a las salas de escape</option>
+              <option value="empresa">Equipo de una empresa</option>
+              <option value="amigos">Grupo de amigos</option>
+              <option value="vecinos">Grupo de vecinos</option>
+              <option value="club">Club / asociación</option>
+            </select>
+          </label>
+          <label>Rondas
+            <select id="roundsSelect"><option>3</option><option selected>5</option><option>7</option></select>
+          </label>
+          <button id="startGameBtn" class="primary-btn compact">Iniciar partida</button>
+        </div>
+        <div class="info-section">
+          <div class="participants-head"><span id="participantTitle">1 participante</span><span>máx. 12</span></div>
+          <div id="participants" class="participants"></div>
+        </div>
+        <div class="info-section danger-zone"><button id="leaveRoomBtn">Salir del grupo</button></div>
+      </aside>
+    </section>
+
+    <div id="roleModal" class="modal-backdrop hidden">
+      <div class="role-card">
+        <div id="roleEmoji" class="role-emoji">🕵️</div>
+        <span class="eyebrow">TU PERSONAJE</span>
+        <h2 id="roleName">Investigador</h2>
+        <p id="roleDescription"></p>
+        <div id="roleAlignment" class="alignment-pill">LEAL</div>
+        <button id="closeRoleBtn" class="primary-btn">Entendido</button>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

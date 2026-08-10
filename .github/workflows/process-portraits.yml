@@ -1,10 +1,10 @@
-name: Process portrait mosaics
+name: Process El Topo portraits
 
 on:
   push:
     paths:
-      - 'portraitspng/**/*.png'
-      - 'tools/process_portraits.py'
+      - 'eltopo/portraitspng/**'
+      - 'eltopo/tools/process_portraits.py'
   workflow_dispatch:
 
 permissions:
@@ -12,30 +12,23 @@ permissions:
 
 jobs:
   process:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install Pillow
-        run: pip install pillow
-
-      - name: Split mosaics and convert to JPG
-        run: python tools/process_portraits.py
-
-      - name: Commit generated portraits
+      - run: pip install Pillow
+      - run: python eltopo/tools/process_portraits.py
+      - name: Commit processed JPGs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add portraits
+          git add eltopo/portraits eltopo/avatar-manifest.json
           if git diff --cached --quiet; then
-            echo "No portrait changes to commit"
-            exit 0
+            echo "No portrait changes"
+          else
+            git commit -m "Process El Topo portraits"
+            git push
           fi
-          git commit -m "Generate portrait JPGs"
-          git push
