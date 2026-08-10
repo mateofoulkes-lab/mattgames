@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=0.3.1" />
+  <link rel="stylesheet" href="./styles.css?v=0.4.0" />
 </head>
 <body>
-  <div id="versionBadge" style="position:fixed;right:8px;bottom:6px;z-index:99999;font:600 10px/1.2 Inter,system-ui,sans-serif;color:rgba(255,255,255,.82);background:rgba(17,27,33,.82);padding:4px 7px;border-radius:8px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.18)">v0.3.1 · 0 peers</div>
+  <div id="versionBadge" style="position:fixed;right:8px;bottom:6px;z-index:99999;font:600 10px/1.2 Inter,system-ui,sans-serif;color:rgba(255,255,255,.86);background:rgba(17,27,33,.86);padding:4px 7px;border-radius:8px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.18)">v0.4.0 · 0 peers</div>
   <div id="app">
     <section id="landing" class="landing screen active">
       <div class="landing-card">
@@ -20,12 +20,8 @@
         <p class="tagline">Todos tienen algo que ocultar. Solo uno saca capturas.</p>
         <label class="field-label" for="playerName">Tu nombre</label>
         <input id="playerName" class="text-input" maxlength="20" autocomplete="name" placeholder="Ej. Mateo" />
-        <button id="createRoomBtn" class="primary-btn">Crear sala</button>
-        <div class="divider"><span>o</span></div>
-        <div class="join-row">
-          <input id="roomCodeInput" class="text-input room-code-input" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD" />
-          <button id="joinRoomBtn" class="secondary-btn">Unirme</button>
-        </div>
+        <button id="createRoomBtn" class="primary-btn">Entrar a la sala de prueba</button>
+        <p style="margin:14px 0 0;color:#667781;font-size:12px;line-height:1.4">Modo temporal: todos los dispositivos entran a una única sala para probar P2P, chat e inicio de partida.</p>
         <p id="landingError" class="error-text"></p>
       </div>
     </section>
@@ -34,11 +30,7 @@
       <aside class="sidebar">
         <header class="sidebar-topbar">
           <div class="me-avatar" id="meAvatar">M</div>
-          <div class="sidebar-actions">
-            <button class="icon-btn" title="Estado">◉</button>
-            <button class="icon-btn" title="Nuevo chat">✚</button>
-            <button class="icon-btn" id="sideMenuBtn" title="Menú">⋮</button>
-          </div>
+          <div class="sidebar-actions"><button class="icon-btn">◉</button><button class="icon-btn">✚</button><button class="icon-btn">⋮</button></div>
         </header>
         <div class="search-wrap"><span>⌕</span><input placeholder="Buscar un chat" disabled /></div>
         <div class="chat-list">
@@ -46,7 +38,7 @@
             <div class="group-avatar">🔐</div>
             <div class="chat-list-copy">
               <div class="chat-list-title-row"><strong id="sidebarGroupName">Aficionados a salas de escape</strong><span id="sidebarTime"></span></div>
-              <div class="chat-list-preview"><span id="sidebarPreview">Sala privada · El Topo</span></div>
+              <div class="chat-list-preview"><span id="sidebarPreview">Sala global de prueba</span></div>
             </div>
           </button>
         </div>
@@ -57,15 +49,9 @@
           <button id="mobileBackBtn" class="icon-btn mobile-only">‹</button>
           <button id="groupInfoBtn" class="group-head">
             <div class="group-avatar small">🔐</div>
-            <div class="group-head-copy">
-              <strong id="groupName">Aficionados a salas de escape</strong>
-              <span id="groupSubtitle">Conectando…</span>
-            </div>
+            <div class="group-head-copy"><strong id="groupName">Aficionados a salas de escape</strong><span id="groupSubtitle">Conectando…</span></div>
           </button>
-          <div class="chat-actions">
-            <button class="icon-btn" title="Buscar">⌕</button>
-            <button class="icon-btn" id="chatMenuBtn" title="Menú">⋮</button>
-          </div>
+          <div class="chat-actions"><button class="icon-btn">⌕</button><button class="icon-btn">⋮</button></div>
         </header>
         <div id="gameBanner" class="game-banner hidden"></div>
         <div id="messages" class="messages" aria-live="polite"></div>
@@ -86,8 +72,8 @@
           <p id="infoCount">1 participante</p>
         </div>
         <div class="info-section">
-          <span class="section-kicker">CÓDIGO DE SALA</span>
-          <div class="room-code-card"><strong id="roomCodeDisplay">----</strong><button id="copyCodeBtn">Copiar</button></div>
+          <span class="section-kicker">SALA DE PRUEBA</span>
+          <div class="room-code-card"><strong id="roomCodeDisplay">GLOBAL</strong><button id="copyCodeBtn">Info</button></div>
         </div>
         <div id="hostSettings" class="info-section host-settings hidden">
           <span class="section-kicker">CONFIGURACIÓN</span>
@@ -116,7 +102,7 @@
     <div id="roleModal" class="modal-backdrop hidden">
       <div class="role-card">
         <div id="roleEmoji" class="role-emoji">🕵️</div>
-        <span class="eyebrow">TU PERSONAJE</span>
+        <span class="eyebrow">TU ROL SECRETO</span>
         <h2 id="roleName">Investigador</h2>
         <p id="roleDescription"></p>
         <div id="roleAlignment" class="alignment-pill">LEAL</div>
@@ -125,6 +111,6 @@
     </div>
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script type="module" src="./app.js?v=0.3.1"></script>
+  <script type="module" src="./app.js?v=0.4.0"></script>
 </body>
 </html>
