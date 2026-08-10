@@ -8,10 +8,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=0.4.0" />
+  <link rel="stylesheet" href="./styles.css?v=0.5.0" />
+  <link rel="stylesheet" href="./v050.css?v=0.5.0" />
 </head>
 <body>
-  <div id="versionBadge" style="position:fixed;right:8px;bottom:6px;z-index:99999;font:600 10px/1.2 Inter,system-ui,sans-serif;color:rgba(255,255,255,.86);background:rgba(17,27,33,.86);padding:4px 7px;border-radius:8px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.18)">v0.4.0 · 0 peers</div>
+  <div id="versionBadge" style="position:fixed;right:8px;bottom:6px;z-index:99999;font:600 10px/1.2 Inter,system-ui,sans-serif;color:rgba(255,255,255,.86);background:rgba(17,27,33,.86);padding:4px 7px;border-radius:8px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.18)">v0.5.0 · 0 peers</div>
   <div id="app">
     <section id="landing" class="landing screen active">
       <div class="landing-card">
@@ -21,7 +22,7 @@
         <label class="field-label" for="playerName">Tu nombre</label>
         <input id="playerName" class="text-input" maxlength="20" autocomplete="name" placeholder="Ej. Mateo" />
         <button id="createRoomBtn" class="primary-btn">Entrar a la sala de prueba</button>
-        <p style="margin:14px 0 0;color:#667781;font-size:12px;line-height:1.4">Modo temporal: todos los dispositivos entran a una única sala para probar P2P, chat e inicio de partida.</p>
+        <p style="margin:14px 0 0;color:#667781;font-size:12px;line-height:1.4">Modo temporal: todos entran a una única sala. Con 2 jugadores ya se puede probar la partida completa.</p>
         <p id="landingError" class="error-text"></p>
       </div>
     </section>
@@ -111,6 +112,6 @@
     </div>
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script type="module" src="./app.js?v=0.4.0"></script>
+  <script type="module" src="./app.js?v=0.5.0"></script>
 </body>
 </html>
