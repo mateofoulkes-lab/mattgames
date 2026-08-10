@@ -1,0 +1,41 @@
+name: Process portrait mosaics
+
+on:
+  push:
+    paths:
+      - 'portraitspng/**/*.png'
+      - 'tools/process_portraits.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Pillow
+        run: pip install pillow
+
+      - name: Split mosaics and convert to JPG
+        run: python tools/process_portraits.py
+
+      - name: Commit generated portraits
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add portraits
+          if git diff --cached --quiet; then
+            echo "No portrait changes to commit"
+            exit 0
+          fi
+          git commit -m "Generate portrait JPGs"
+          git push
