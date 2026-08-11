@@ -22,5 +22,7 @@ jobs:
           node-version: '22'
       - name: Check social game syntax
         run: node --check eltopo/social-game.js
+      - name: Check Incognito personas syntax
+        run: node --check eltopo/incognito-personas.js
       - name: Check Metered adapter syntax
         run: node --check eltopo/metered-trystero-adapter.js
