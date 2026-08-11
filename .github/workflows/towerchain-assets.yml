@@ -1,0 +1,47 @@
+name: Tower Chain assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'towerchain/index.html'
+      - 'towerchain/style.css'
+      - 'towerchain/game.js'
+      - 'towerchain/README.md'
+      - '.github/workflows/towerchain-assets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  install-assets:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download prepared Tower Chain assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p towerchain/assets/generated
+          curl -fL --retry 3 'https://at.adobe.com/aCtvmrR1Q8FkVclS' -o towerchain/assets/generated/towers_atlas.webp
+          curl -fL --retry 3 'https://at.adobe.com/lQLDYDKeXRqrswH6' -o towerchain/assets/generated/enemies_early_atlas.webp
+          curl -fL --retry 3 'https://at.adobe.com/ATaklBdgJmFfv9PB' -o towerchain/assets/generated/enemies_late_atlas.webp
+          curl -fL --retry 3 'https://at.adobe.com/3YiPQZYPVWE3uVyl' -o towerchain/assets/generated/cupcake_atlas.webp
+          curl -fL --retry 3 'https://at.adobe.com/Z937azaSHkckvFM9' -o towerchain/assets/generated/projectiles_atlas.webp
+          curl -fL --retry 3 'https://at.adobe.com/iZ6Nyqn5K1JU8qvk' -o towerchain/assets/generated/effects_atlas.webp
+          curl -fL --retry 3 'https://at.adobe.com/ZTRgkcokp8WSzNSr' -o towerchain/assets/generated/cards_atlas.webp
+          curl -fL --retry 3 'https://at.adobe.com/Vwqk9EF2yftHfK21' -o towerchain/assets/generated/battlefield.jpg
+          curl -fL --retry 3 'https://at.adobe.com/KJCRP45VmTnLxrsq' -o towerchain/assets/generated/splash.jpg
+          file towerchain/assets/generated/*
+      - name: Commit runtime art
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add towerchain/assets/generated
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Install Tower Chain art assets'
+          git push
