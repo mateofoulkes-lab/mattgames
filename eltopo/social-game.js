@@ -1,7 +1,8 @@
 import { AVATARS } from './game-data.js';
+import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.7.0';
+const VERSION = '0.7.2';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
 const MIN_PLAYERS = 2;
@@ -214,7 +215,7 @@ function onIntro(cid,p){
     if(!m){
       const late=state.started || players().length>=MAX_PLAYERS;
       m=state.members[cid]={id:cid,realName:String(p?.name||'Jugador').slice(0,20),publicName:String(p?.name||'Jugador').slice(0,20),avatar:p?.avatar||null,online:true,spectator:late,joinedAt:now()};
-      if(state.started) addSystem(`${m.realName} entró tarde y quedó como espectador hasta la próxima partida.`);
+      if(state.started) addSystem(state.mode==='incognito' ? 'Un participante entró tarde y quedó como espectador hasta la próxima partida.' : `${m.realName} entró tarde y quedó como espectador hasta la próxima partida.`);
       else if(late) addSystem(`${m.realName} entró como espectador porque la sala ya tiene ${MAX_PLAYERS} jugadores.`);
       else addSystem(`${m.realName} se unió al grupo.`);
     }else{
@@ -353,17 +354,23 @@ function showScoreboard(){
 }
 
 function makePersona(avatar){
-  return {name:pick(PERSONA_NAMES),occupation:pick(OCCUPATIONS),detail:pick(DETAILS),avatar:avatar.id};
+  return makeIncognitoPersona(avatar);
 }
 function startIncognito(ids){
   state.started=true; state.phase='persona-select'; state.mode='incognito'; state.final=false; state.trigger=''; state.scores=null;
+  // Incógnito must not retain lobby traces containing real names.
+  state.messages=[{id:uid(),system:true,text:'🕶️ Modo Incógnito activado. El historial del lobby fue eliminado para proteger las identidades.',ts:now()}];
+  replyingTo=null;
   const pool=shuffle(AVATARS).slice(0,Math.min(AVATARS.length,ids.length*2));
   ids.forEach((id,i)=>{
     const options=[makePersona(pool[i*2%pool.length]),makePersona(pool[(i*2+1)%pool.length])];
     state.members[id].publicName='Incógnito…'; state.members[id].persona=null; state.members[id].spectator=false;
     if(id===selfId) onPersonaOptions({options}); else send('persona-options',{options},id).catch(()=>{});
   });
-  broadcastRoster(); renderAll();
+  broadcastRoster();
+  // Sync the clean Incognito history immediately, before anyone can see old lobby names.
+  send('incognito-start',{state:snapshotForClient()}).catch(()=>{});
+  renderAll();
 }
 function onPersonaOptions(p){ personaOptions=p?.options||[]; openPersonaPicker(); }
 function openPersonaPicker(){
