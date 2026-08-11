@@ -7,6 +7,7 @@ on:
       - 'towerchain/index.html'
       - 'towerchain/style.css'
       - 'towerchain/game.js'
+      - 'towerchain/README.md'
       - '.github/workflows/towerchain-assets.yml'
   workflow_dispatch:
 
@@ -19,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download lossless source-derived game assets
+      - name: Download prepared Tower Chain assets
         shell: bash
         run: |
           set -euo pipefail
@@ -34,7 +35,7 @@ jobs:
           curl -fL --retry 3 'https://at.adobe.com/Vwqk9EF2yftHfK21' -o towerchain/assets/generated/battlefield.jpg
           curl -fL --retry 3 'https://at.adobe.com/KJCRP45VmTnLxrsq' -o towerchain/assets/generated/splash.jpg
           file towerchain/assets/generated/*
-      - name: Commit generated assets
+      - name: Commit runtime art
         shell: bash
         run: |
           set -euo pipefail
