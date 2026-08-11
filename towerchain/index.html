@@ -1,0 +1,9 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Tower Chain</title><link rel="stylesheet" href="style.css"></head><body>
+<div id="splash" class="screen splash"><div class="splash-panel"><h1>TOWER CHAIN</h1><p>Protegé el cupcake. Rompé la lógica. Volvé ridícula la torre.</p><button id="startBtn">JUGAR</button><small>v0.1.0</small></div></div>
+<div id="game" class="screen game hidden"><canvas id="canvas"></canvas>
+<div class="topHud"><div>❤️ <b id="hp">100</b></div><div>🌊 <b id="wave">1</b></div><div>💰 <b id="gold">0</b></div><div>💎 <b id="bonus">0</b></div><div class="towerLvl">TORRE <b id="towerLevel">1</b>/20</div></div>
+<div id="powerup" class="powerup hidden">💎</div>
+<div id="cards" class="cards hidden"><div class="cardsTitle">ELEGÍ UNA MEJORA</div><div id="cardWrap" class="cardWrap"></div></div>
+<div id="end" class="end hidden"><h2 id="endTitle"></h2><p id="endText"></p><button onclick="location.reload()">VOLVER A JUGAR</button></div>
+<div class="version">v0.1.0</div></div>
+<script src="game.js"></script></body></html>
