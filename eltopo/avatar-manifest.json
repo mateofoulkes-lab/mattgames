@@ -238,5 +238,49 @@
       627
     ],
     "file": "portraits/cantante-fiesta.jpg"
+  },
+  {
+    "source": "7.jpeg",
+    "slot": 1,
+    "type": "single",
+    "name": "conductora-tv",
+    "size": [
+      627,
+      627
+    ],
+    "file": "portraits/conductora-tv.jpg"
+  },
+  {
+    "source": "8.jpg",
+    "slot": 1,
+    "type": "single",
+    "name": "cumbiero-keytar",
+    "size": [
+      627,
+      627
+    ],
+    "file": "portraits/cumbiero-keytar.jpg"
+  },
+  {
+    "source": "9.jpg",
+    "slot": 1,
+    "type": "single",
+    "name": "maquilladora-funeraria",
+    "size": [
+      627,
+      627
+    ],
+    "file": "portraits/maquilladora-funeraria.jpg"
+  },
+  {
+    "source": "10.jpg",
+    "slot": 1,
+    "type": "single",
+    "name": "empleada-municipal",
+    "size": [
+      627,
+      627
+    ],
+    "file": "portraits/empleada-municipal.jpg"
   }
 ]
