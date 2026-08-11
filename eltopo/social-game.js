@@ -2,7 +2,7 @@ import { AVATARS } from './game-data.js';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.7.2';
+const VERSION = '0.8.0';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
 const MIN_PLAYERS = 2;
@@ -86,6 +86,7 @@ let roomCode = '';
 let isAdmin = false;
 let joined = false;
 let connectTimer = null;
+let returnLobbyTimer = null;
 let myName = '';
 let myAvatar = null;
 let replyingTo = null;
@@ -99,7 +100,7 @@ let state = freshState();
 function freshState(){
   return {
     roomCode:'', adminId:null, mode:null, phase:'lobby', started:false,
-    members:{}, messages:[], trigger:'', guesses:{}, scores:null,
+    members:{}, lobbyMessages:[], messages:[], trigger:'', guesses:{}, scores:null,
     final:false, reveal:null, createdAt:now(), spyfall:{votes:{},result:null}
   };
 }
@@ -189,6 +190,8 @@ function handleEnvelope(peerId,data){
     case 'intro': return onIntro(cid,data.payload);
     case 'snapshot': return onSnapshot(data.payload);
     case 'roster': return onRoster(data.payload);
+    case 'lobby-chat': return onLobbyChat(data.payload,cid);
+    case 'return-lobby': return onReturnLobby(data.payload);
     case 'chat': return onChat(data.payload,cid);
     case 'reaction': return onReaction(data.payload,cid);
     case 'mode': return onMode(data.payload);
@@ -214,12 +217,12 @@ function onIntro(cid,p){
     let m=state.members[cid];
     if(!m){
       const late=state.started || players().length>=MAX_PLAYERS;
-      m=state.members[cid]={id:cid,realName:String(p?.name||'Jugador').slice(0,20),publicName:String(p?.name||'Jugador').slice(0,20),avatar:p?.avatar||null,online:true,spectator:late,joinedAt:now()};
+      m=state.members[cid]={id:cid,realName:String(p?.name||'Jugador').slice(0,20),publicName:String(p?.name||'Jugador').slice(0,20),avatar:p?.avatar||null,lobbyAvatar:p?.avatar||null,online:true,spectator:late,joinedAt:now()};
       if(state.started) addSystem(state.mode==='incognito' ? 'Un participante entró tarde y quedó como espectador hasta la próxima partida.' : `${m.realName} entró tarde y quedó como espectador hasta la próxima partida.`);
-      else if(late) addSystem(`${m.realName} entró como espectador porque la sala ya tiene ${MAX_PLAYERS} jugadores.`);
-      else addSystem(`${m.realName} se unió al grupo.`);
+      else if(late) addLobbySystem(`${m.realName} entró como espectador porque la sala ya tiene ${MAX_PLAYERS} jugadores.`);
+      else addLobbySystem(`${m.realName} se unió a la sala.`);
     }else{
-      m.online=true; m.realName=String(p?.name||m.realName).slice(0,20); if(!state.started)m.publicName=m.realName; if(p?.avatar&&!state.started)m.avatar=p.avatar;
+      m.online=true; m.realName=String(p?.name||m.realName).slice(0,20); if(!state.started)m.publicName=m.realName; if(p?.avatar&&!state.started){m.avatar=p.avatar;m.lobbyAvatar=p.avatar;} if(!state.started&&!m.lobbyAvatar)m.lobbyAvatar=m.avatar||null;
     }
     sendSnapshot(cid);
     broadcastRoster();
@@ -235,7 +238,7 @@ function onSnapshot(p){
   state=p.state; state.members[selfId] ||= {id:selfId,realName:myName,publicName:myName,avatar:myAvatar,online:true,spectator:state.started,joinedAt:now()};
   state.members[selfId].online=true;
   clearTimeout(connectTimer);
-  enterMessenger();
+  state.started ? enterMessenger() : enterLobby();
   if(!state.started && !myAvatar) openAvatarPicker();
   renderAll();
 }
@@ -257,21 +260,22 @@ function createRoom(){
   if(!myName){$('landingError').textContent='Poné tu nombre real.';return;}
   roomCode=makeCode();
   state=freshState(); state.roomCode=roomCode; state.adminId=selfId;
-  state.members[selfId]={id:selfId,realName:myName,publicName:myName,avatar:myAvatar,online:true,spectator:false,joinedAt:now()};
+  state.members[selfId]={id:selfId,realName:myName,publicName:myName,avatar:myAvatar,lobbyAvatar:myAvatar,online:true,spectator:false,joinedAt:now()};
   selectedMode='mixed'; state.mode='mixed';
   $('landingError').textContent='Creando sala…';
-  connectToRoom(roomCode,true).then(()=>{ enterMessenger(); addSystem(`Sala ${roomCode} creada. Compartí el código.`); openAvatarPicker(); renderAll(); }).catch(e=>{$('landingError').textContent=e.message;});
+  connectToRoom(roomCode,true).then(()=>{ enterLobby(); addLobbySystem(`Sala ${roomCode} creada. Compartí el código.`); openAvatarPicker(); renderAll(); }).catch(e=>{$('landingError').textContent=e.message;});
 }
 function joinRoom(){
   myName=$('playerName')?.value.trim()||''; const code=cleanCode($('joinCode')?.value);
   if(!myName){$('landingError').textContent='Poné tu nombre real.';return;}
   if(code.length!==4){$('landingError').textContent='El código tiene 4 letras.';return;}
   state=freshState(); state.roomCode=code;
-  state.members[selfId]={id:selfId,realName:myName,publicName:myName,avatar:myAvatar,online:true,spectator:false,joinedAt:now()};
+  state.members[selfId]={id:selfId,realName:myName,publicName:myName,avatar:myAvatar,lobbyAvatar:myAvatar,online:true,spectator:false,joinedAt:now()};
   $('landingError').textContent='Buscando sala…';
   connectToRoom(code,false).then(()=>{ $('landingError').textContent='Esperando al administrador…'; }).catch(e=>{$('landingError').textContent=e.message;});
 }
-function enterMessenger(){ $('landing')?.classList.remove('active'); $('messenger')?.classList.add('active'); $('landingError').textContent=''; }
+function enterLobby(){ $('landing')?.classList.remove('active'); $('messenger')?.classList.remove('active'); $('roomLobby')?.classList.add('active'); if($('landingError'))$('landingError').textContent=''; }
+function enterMessenger(){ $('landing')?.classList.remove('active'); $('roomLobby')?.classList.remove('active'); $('messenger')?.classList.add('active'); if($('landingError'))$('landingError').textContent=''; }
 
 function setMode(mode){
   if(!isAdmin||state.started||MODES[mode]?.disabled)return;
@@ -297,7 +301,7 @@ function derangement(ids){
 }
 function startMixed(ids){
   const assigned=derangement(ids);
-  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.trigger=pick(TRIGGERS);
+  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.trigger=pick(TRIGGERS); state.messages=[]; replyingTo=null; enterMessenger();
   ids.forEach((actorId,i)=>{
     const targetId=assigned[i]; const targetName=state.members[targetId].realName;
     state.members[actorId].publicName=targetName;
@@ -347,7 +351,7 @@ function finalizeMixed(){
   const payload={scores,reveal,guesses:state.guesses};
   send('mixed-final',payload).catch(()=>{}); onMixedFinal(payload); addSystem('🏁 El administrador cerró la votación. Se revelaron las identidades.');
 }
-function onMixedFinal(p){ state.final=true; state.scores=p.scores||{}; state.reveal=p.reveal||{}; if(p.guesses)state.guesses=p.guesses; renderAll(); showScoreboard(); }
+function onMixedFinal(p){ state.final=true; state.phase='finished'; state.scores=p.scores||{}; state.reveal=p.reveal||{}; if(p.guesses)state.guesses=p.guesses; renderAll(); showScoreboard(); if(isAdmin)scheduleReturnToLobby('Todo mezclado terminó.'); }
 function showScoreboard(){
   const rows=players().sort((a,b)=>(state.scores?.[b.id]||0)-(state.scores?.[a.id]||0)).map(m=>`<div class="score-row"><div class="score-avatar">${avatarMarkup(m)}</div><div><strong>${esc(state.reveal?.[m.id]?.shown||displayName(m))}</strong><span>Era ${esc(state.reveal?.[m.id]?.real||m.realName)}</span></div><b>${state.scores?.[m.id]||0} pts</b></div>`).join('');
   showModal('Resultado · Todo mezclado',`<div class="score-list">${rows}</div><p class="modal-note">+1 por cada identidad acertada. +1 por cada voto equivocado que lograste provocar sobre tu usuario.</p>`);
@@ -357,7 +361,7 @@ function makePersona(avatar){
   return makeIncognitoPersona(avatar);
 }
 function startIncognito(ids){
-  state.started=true; state.phase='persona-select'; state.mode='incognito'; state.final=false; state.trigger=''; state.scores=null;
+  state.started=true; state.phase='persona-select'; state.mode='incognito'; state.final=false; state.trigger=''; state.scores=null; enterMessenger();
   // Incógnito must not retain lobby traces containing real names.
   state.messages=[{id:uid(),system:true,text:'🕶️ Modo Incógnito activado. El historial del lobby fue eliminado para proteger las identidades.',ts:now()}];
   replyingTo=null;
@@ -397,11 +401,11 @@ function onPersonaChoice(p,cid){
     const payload={state:snapshotForClient()}; send('incognito-start',payload).catch(()=>{}); renderAll();
   }
 }
-function onIncognitoStart(p){ if(p?.state)state=p.state; renderAll(); }
+function onIncognitoStart(p){ if(p?.state)state=p.state; if(state.started)enterMessenger(); renderAll(); if(state.final)showIncognitoReveal(); }
 function revealIncognito(){
   if(!isAdmin||state.mode!=='incognito'||state.final)return;
   state.final=true; state.phase='finished'; state.reveal=Object.fromEntries(players().map(m=>[m.id,{persona:displayName(m),real:m.realName}]));
-  const payload={state:snapshotForClient()}; send('incognito-start',payload).catch(()=>{}); showIncognitoReveal(); renderAll();
+  const payload={state:snapshotForClient()}; send('incognito-start',payload).catch(()=>{}); showIncognitoReveal(); renderAll(); scheduleReturnToLobby('Incógnito terminó.');
 }
 function showIncognitoReveal(){
   const rows=players().map(m=>`<div class="score-row"><div class="score-avatar">${avatarMarkup(m)}</div><div><strong>${esc(displayName(m))}</strong><span>Era ${esc(m.realName)}</span></div></div>`).join('');
@@ -409,7 +413,7 @@ function showIncognitoReveal(){
 }
 
 function startSpyfall(ids){
-  state.started=true; state.phase='playing'; state.mode='spyfall'; state.final=false; state.spyfall={votes:{},result:null}; state.trigger='Hagan preguntas de a uno. Todos conocen el lugar excepto el espía. No sean demasiado obvios.';
+  state.started=true; state.phase='playing'; state.mode='spyfall'; state.final=false; state.spyfall={votes:{},result:null}; state.trigger='Hagan preguntas de a uno. Todos conocen el lugar excepto el espía. No sean demasiado obvios.'; state.messages=[]; replyingTo=null; enterMessenger();
   const location=pick(SPY_LOCATIONS); const spyId=pick(ids); const roles=shuffle(location.roles);
   ids.forEach((id,i)=>{
     const info=id===spyId?{mode:'spyfall',isSpy:true}:{mode:'spyfall',isSpy:false,location:location.name,role:roles[i%roles.length]};
@@ -422,7 +426,7 @@ function startSpyfall(ids){
   send('spy-start',{state:publicState}).catch(()=>{}); renderAll();
 }
 function onSpyPrivate(p){ privateInfo=p; showPrivateCard(); }
-function onSpyStart(p){ if(p?.state)state=p.state; renderAll(); }
+function onSpyStart(p){ if(p?.state)state=p.state; enterMessenger(); renderAll(); }
 function castSpyVote(targetId){
   if(state.mode!=='spyfall'||state.final||targetId===selfId)return;
   state.spyfall.votes[selfId]=targetId; send('spy-vote',{targetId}).catch(()=>{}); renderAll();
@@ -439,10 +443,10 @@ function finalizeSpyfall(){
   const payload={result,spyId:spy,spyName:state.members[spy]?.realName||'?',location:state._spyLocation||'?',votes:state.spyfall.votes};
   send('spy-final',payload).catch(()=>{}); onSpyFinal(payload);
 }
-function onSpyFinal(p){ state.final=true; state.phase='finished'; state.spyfall.result=p.result; state.spyfall.spyId=p.spyId; state.spyfall.spyName=p.spyName; state.spyfall.location=p.location; if(p.votes)state.spyfall.votes=p.votes; renderAll(); showModal('Resultado · Spyfall',`<div class="spy-result"><strong>${esc(p.result)}</strong><span>Espía: ${esc(p.spyName)}</span><span>Lugar: ${esc(p.location)}</span></div>`); }
+function onSpyFinal(p){ state.final=true; state.phase='finished'; state.spyfall.result=p.result; state.spyfall.spyId=p.spyId; state.spyfall.spyName=p.spyName; state.spyfall.location=p.location; if(p.votes)state.spyfall.votes=p.votes; renderAll(); showModal('Resultado · Spyfall',`<div class="spy-result"><strong>${esc(p.result)}</strong><span>Espía: ${esc(p.spyName)}</span><span>Lugar: ${esc(p.location)}</span><small>Volviendo al lobby en unos segundos…</small></div>`); if(isAdmin)scheduleReturnToLobby(`Spyfall: ${p.result}`); }
 function guessSpyLocation(){
   if(privateInfo?.mode!=='spyfall'||!privateInfo.isSpy||state.final)return;
-  showModal('Adivinar ubicación',`<p class="modal-note">Si acertás, ganás inmediatamente. Si fallás, gana el grupo.</p><div class="guess-list">${SPY_LOCATIONS.map(l=>`<button class="guess-option" data-loc="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`,modal=>modal.querySelectorAll('[data-loc]').forEach(b=>b.onclick=()=>{send('spy-guess-location',{location:b.dataset.loc}).catch(()=>{});closeGenericModal();}));
+  showModal('Adivinar ubicación',`<p class="modal-note">Si acertás, ganás inmediatamente. Si fallás, gana el grupo.</p><div class="guess-list">${SPY_LOCATIONS.map(l=>`<button class="guess-option" data-loc="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`,modal=>modal.querySelectorAll('[data-loc]').forEach(b=>b.onclick=()=>{const payload={location:b.dataset.loc}; if(isAdmin)onSpyGuessLocation(payload,selfId); else send('spy-guess-location',payload).catch(()=>{}); closeGenericModal();}));
 }
 function onSpyGuessLocation(p,cid){
   if(!isAdmin||state.mode!=='spyfall'||state.final||cid!==state._spyId)return;
@@ -450,6 +454,100 @@ function onSpyGuessLocation(p,cid){
   state.final=true; const result=correct?`El espía adivinó “${state._spyLocation}”. Gana el espía.`:`El espía falló: dijo “${p?.location}”. El lugar era “${state._spyLocation}”. Gana el grupo.`;
   onSpyFinal({result,spyId:state._spyId,spyName:state.members[state._spyId]?.realName||'?',location:state._spyLocation,votes:state.spyfall.votes});
   send('spy-final',{result,spyId:state._spyId,spyName:state.members[state._spyId]?.realName||'?',location:state._spyLocation,votes:state.spyfall.votes}).catch(()=>{});
+}
+
+function addLobbySystem(text){
+  if(!text)return;
+  state.lobbyMessages ||= [];
+  const msg={id:uid(),system:true,text,ts:now()};
+  state.lobbyMessages.push(msg);
+  if(isAdmin&&joined)send('lobby-chat',msg).catch(()=>{});
+  renderRoomLobby();
+}
+function onLobbyChat(msg,cid){
+  if(!msg?.id)return;
+  state.lobbyMessages ||= [];
+  if(state.lobbyMessages.some(m=>m.id===msg.id))return;
+  const copy=clone(msg);
+  if(!copy.system){
+    const sender=state.members[cid];
+    copy.senderId=cid;
+    copy.senderName=copy.senderName||sender?.realName||'Jugador';
+  }
+  state.lobbyMessages.push(copy);
+  state.lobbyMessages.sort((a,b)=>a.ts-b.ts);
+  renderRoomLobby();
+}
+function sendLobbyChat(){
+  if(state.started)return;
+  const input=$('lobbyChatInput'); const text=input?.value.trim(); if(!text)return;
+  input.value='';
+  const msg={id:uid(),senderId:selfId,senderName:me()?.realName||myName,text:text.slice(0,500),ts:now()};
+  state.lobbyMessages ||= []; state.lobbyMessages.push(msg); renderRoomLobby();
+  send('lobby-chat',msg).catch(()=>toast('No se pudo enviar el mensaje del lobby'));
+}
+
+function scheduleReturnToLobby(summary){
+  if(!isAdmin)return;
+  clearTimeout(returnLobbyTimer);
+  returnLobbyTimer=setTimeout(()=>returnEveryoneToLobby(summary),6500);
+}
+function returnEveryoneToLobby(summary='Partida terminada.'){
+  if(!isAdmin)return;
+  clearTimeout(returnLobbyTimer);
+  state.started=false; state.phase='lobby'; state.final=false; state.trigger=''; state.messages=[];
+  state.guesses={}; state.scores=null; state.reveal=null; state.spyfall={votes:{},result:null};
+  delete state._spyId; delete state._spyLocation;
+  for(const m of Object.values(state.members)){
+    m.publicName=m.realName;
+    m.lobbyAvatar ||= m.avatar||null;
+    m.avatar=m.lobbyAvatar||m.avatar;
+    m.spectator=false;
+    delete m.persona; delete m.occupation; delete m.detail;
+  }
+  state.lobbyMessages ||= [];
+  state.lobbyMessages.push({id:uid(),system:true,text:`🏁 ${summary}`,ts:now()});
+  privateInfo=null; personaOptions=null; replyingTo=null; selectedMode=state.mode||selectedMode;
+  const payload={state:snapshotForClient()};
+  send('return-lobby',payload).catch(()=>{});
+  onReturnLobby(payload);
+}
+function onReturnLobby(p){
+  if(!p?.state)return;
+  state=p.state; selectedMode=state.mode||selectedMode; privateInfo=null; personaOptions=null; replyingTo=null;
+  closeGenericModal(); $('characterSelectModal')?.classList.add('hidden');
+  enterLobby(); renderAll();
+}
+
+function renderRoomLobby(){
+  if(!$('roomLobby')||state.started)return;
+  const members=onlineMembers().sort((a,b)=>(a.joinedAt||0)-(b.joinedAt||0));
+  if($('lobbyRoomCode'))$('lobbyRoomCode').textContent=roomCode||state.roomCode||'----';
+  if($('lobbyTitle'))$('lobbyTitle').textContent=`Sala ${roomCode||state.roomCode||'----'}`;
+  if($('lobbyPlayerCount'))$('lobbyPlayerCount').textContent=`${members.length}/${MAX_PLAYERS} jugadores`;
+  if($('lobbyModeHint'))$('lobbyModeHint').textContent=isAdmin?'Elegí qué van a jugar.':'El administrador está eligiendo el modo.';
+  const playersBox=$('lobbyPlayers');
+  if(playersBox){
+    playersBox.innerHTML=members.map(m=>`<button class="lobby-player-card" data-lobby-profile="${m.id}"><div class="lobby-player-avatar">${avatarMarkup(m)}</div><div class="lobby-player-copy"><strong>${esc(m.realName)}${m.id===selfId?' (vos)':''}</strong><span>${m.online===false?'desconectado':'listo'}</span></div>${m.id===state.adminId?'<b class="lobby-admin-tag">ADMIN</b>':''}</button>`).join('');
+    playersBox.querySelectorAll('[data-lobby-profile]').forEach(b=>b.onclick=()=>b.dataset.lobbyProfile===selfId?showPrivateCard():showPublicProfile(b.dataset.lobbyProfile));
+  }
+  const grid=$('lobbyModeGrid');
+  if(grid){
+    grid.innerHTML=Object.entries(MODES).map(([k,m])=>`<button class="lobby-mode-card ${state.mode===k?'selected':''} ${m.disabled?'unavailable':''}" data-lobby-mode="${k}" ${(m.disabled||!isAdmin)?'disabled':''}><span class="lobby-mode-icon">${m.emoji}</span><strong>${esc(m.name)}</strong><small>${esc(m.desc)}</small>${m.disabled?'<em class="lobby-soon">PRÓXIMAMENTE</em>':''}</button>`).join('');
+    grid.querySelectorAll('[data-lobby-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.lobbyMode));
+  }
+  const start=$('lobbyStartBtn');
+  if(start){
+    start.classList.toggle('hidden',!isAdmin);
+    start.disabled=activePlayerIds().length<MIN_PLAYERS||MODES[state.mode]?.disabled;
+    start.textContent=`Iniciar ${MODES[state.mode]?.name||'partida'} · ${activePlayerIds().length}`;
+  }
+  const chat=$('lobbyChatMessages');
+  if(chat){
+    const msgs=state.lobbyMessages||[];
+    chat.innerHTML=msgs.length?msgs.map(m=>m.system?`<div class="lobby-chat-system">${esc(m.text)}</div>`:`<div class="lobby-chat-msg ${m.senderId===selfId?'mine':''}"><strong>${m.senderId===selfId?'Vos':esc(m.senderName||'Jugador')}</strong><span>${esc(m.text)}</span></div>`).join(''):'<div class="lobby-chat-empty">Todavía no hablaron por acá.</div>';
+    chat.scrollTop=chat.scrollHeight;
+  }
 }
 
 function addSystem(text){
@@ -485,7 +583,7 @@ function onReaction(p,cid){
   msg.reactions ||= {}; msg.reactions[p.emoji] ||= []; const arr=msg.reactions[p.emoji]; const i=arr.indexOf(cid); if(i>=0)arr.splice(i,1);else arr.push(cid); if(!arr.length)delete msg.reactions[p.emoji]; renderMessages();
 }
 
-function renderAll(){ renderHeader(); renderMembers(); renderMessages(); renderLobby(); renderGameBar(); renderSelfProfile(); updateConnectionBadge(); }
+function renderAll(){ renderRoomLobby(); renderHeader(); renderMembers(); renderMessages(); renderLobby(); renderGameBar(); renderSelfProfile(); updateConnectionBadge(); }
 function renderHeader(){
   const title=state.started?modeGroupName():`Sala ${roomCode||'----'}`;
   ['groupName','sidebarGroupName','infoGroupName'].forEach(id=>{if($(id))$(id).textContent=title;});
@@ -585,7 +683,7 @@ function openAvatarPicker(){
   grid.querySelectorAll('[data-avatar]').forEach(b=>b.onclick=()=>chooseLobbyAvatar(b.dataset.avatar)); modal.classList.remove('hidden');
 }
 function chooseLobbyAvatar(id){
-  myAvatar=id; if(state.members[selfId])state.members[selfId].avatar=id; $('characterSelectModal').classList.add('hidden'); renderAll();
+  myAvatar=id; if(state.members[selfId]){state.members[selfId].avatar=id;state.members[selfId].lobbyAvatar=id;} $('characterSelectModal').classList.add('hidden'); renderAll();
   if(joined){ sendIntro(); if(isAdmin)broadcastRoster(); }
 }
 
@@ -614,6 +712,12 @@ function leaveRoom(){ try{transportRoom?.leave?.();}catch{} location.reload(); }
 $('createRoomBtn')?.addEventListener('click',createRoom);
 $('joinRoomBtn')?.addEventListener('click',joinRoom);
 $('joinCode')?.addEventListener('input',e=>e.target.value=cleanCode(e.target.value));
+$('lobbyChatSend')?.addEventListener('click',sendLobbyChat);
+$('lobbyChatInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendLobbyChat();}});
+$('lobbyCopyCode')?.addEventListener('click',()=>navigator.clipboard?.writeText(roomCode).then(()=>toast('Código copiado')));
+$('lobbyStartBtn')?.addEventListener('click',startGame);
+$('lobbyChangeAvatarBtn')?.addEventListener('click',openAvatarPicker);
+$('lobbyLeaveBtn')?.addEventListener('click',leaveRoom);
 $('sendBtn')?.addEventListener('click',sendChat);
 $('messageInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}});
 $('emojiBtn')?.addEventListener('click',toggleEmojiPicker);

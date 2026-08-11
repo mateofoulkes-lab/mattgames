@@ -8,10 +8,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./social.css?v=0.7.2" />
+  <link rel="stylesheet" href="./social.css?v=0.8.0" />
+  <link rel="stylesheet" href="./lobby.css?v=0.8.0" />
 </head>
 <body>
-  <div id="connectionBadge" class="connection-badge wait">v0.7.2 · sin conectar</div>
+  <div id="connectionBadge" class="connection-badge wait">v0.8.0 · sin conectar</div>
 
   <section id="landing" class="landing screen active">
     <div class="landing-card">
@@ -29,6 +30,45 @@
       </div>
       <p id="landingError" class="error-text"></p>
       <p class="landing-note">Las salas usan 4 letras. El administrador elige el juego después de crearla. Tu nombre debe ser el real porque algunos modos mezclan identidades.</p>
+    </div>
+  </section>
+
+
+  <section id="roomLobby" class="room-lobby screen">
+    <div class="lobby-shell">
+      <header class="room-lobby-top">
+        <div class="lobby-brand">
+          <div class="lobby-logo">🎲</div>
+          <div class="lobby-brand-copy"><span class="lobby-eyebrow">SALA DE JUEGO</span><h1 id="lobbyTitle">Sala</h1></div>
+        </div>
+        <div class="lobby-code-box">
+          <div class="lobby-code-copy"><span>CÓDIGO</span><strong id="lobbyRoomCode">----</strong></div>
+          <button id="lobbyCopyCode" class="lobby-copy-btn">Copiar</button>
+        </div>
+        <button id="lobbyLeaveBtn" class="lobby-quiet-btn">Salir</button>
+      </header>
+
+      <div class="lobby-layout">
+        <main class="lobby-main">
+          <section class="lobby-panel">
+            <div class="lobby-section-head"><div><h2>Jugadores</h2><p>Acá están las identidades reales. Al empezar, el juego puede cambiarlas.</p></div><span id="lobbyPlayerCount" class="lobby-count">1/12 jugadores</span></div>
+            <div id="lobbyPlayers" class="lobby-player-grid"></div>
+            <button id="lobbyChangeAvatarBtn" class="lobby-avatar-btn">Cambiar mi foto</button>
+          </section>
+
+          <section class="lobby-panel">
+            <div class="lobby-section-head"><div><h2>Modo de juego</h2><p id="lobbyModeHint">El administrador está preparando la partida.</p></div></div>
+            <div id="lobbyModeGrid" class="lobby-mode-grid"></div>
+            <div class="lobby-start-row"><span class="lobby-start-note">WhatsApp se abre recién cuando empieza la partida.</span><button id="lobbyStartBtn" class="lobby-start-btn hidden">Iniciar partida</button></div>
+          </section>
+        </main>
+
+        <aside class="lobby-chat-panel">
+          <div class="lobby-chat-head"><h2>Chat de sala</h2><span>Un chat simple para organizarse antes de jugar.</span></div>
+          <div id="lobbyChatMessages" class="lobby-chat-messages"></div>
+          <div class="lobby-chat-compose"><input id="lobbyChatInput" maxlength="500" placeholder="Escribí algo…"><button id="lobbyChatSend" title="Enviar">➤</button></div>
+        </aside>
+      </div>
     </div>
   </section>
 
@@ -61,7 +101,6 @@
 
       <div id="gameBanner" class="game-banner hidden"></div>
       <div id="messages" class="messages" aria-live="polite"></div>
-      <div id="lobbyControls" class="lobby-controls"></div>
 
       <div class="composer-wrap">
         <div id="replyPreview" class="reply-preview hidden"></div>
@@ -102,7 +141,7 @@
   </div>
 
   <script src="https://unpkg.com/@metered-ca/realtime@1/dist/index.umd.js"></script>
-  <script type="module" src="./social-game.js?v=0.7.2"></script>
-  <script type="module" src="./mixed-avatar-sync.js?v=0.7.2"></script>
+  <script type="module" src="./social-game.js?v=0.8.0"></script>
+  <script type="module" src="./mixed-avatar-sync.js?v=0.8.0"></script>
 </body>
 </html>
