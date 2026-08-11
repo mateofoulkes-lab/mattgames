@@ -1,0 +1,1638 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tetonor (Simple + Avanzado)</title>
+  <script>
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+    if (isMobile) {
+      window.location.replace('index.html');
+    }
+  </script>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --ink:#eaf0ff;
+      --muted:#a9b7d6;
+      --line:rgba(255,255,255,.10);
+      --accent:#7c5cff;
+      --accent2:#2ee59d;
+      --warn:#ffcc66;
+      --bad:#ff4d6d;
+      --good:#35f28a;
+      --shadow: 0 12px 40px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background:
+        radial-gradient(1200px 700px at 10% 10%, rgba(124,92,255,.22), transparent 60%),
+        radial-gradient(1000px 600px at 90% 20%, rgba(46,229,157,.16), transparent 55%),
+        radial-gradient(900px 650px at 40% 95%, rgba(255,204,102,.10), transparent 60%),
+        var(--bg);
+      color:var(--ink);
+      min-height:100vh;
+      padding:22px;
+    }
+    .wrap{ max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+
+    .topbar{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      padding:14px 16px;
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      box-shadow: var(--shadow);
+    }
+    .brand{ display:flex; flex-direction:column; gap:6px; }
+    .brand h1{
+      margin:0; font-size:18px; letter-spacing:.2px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .pill{
+      font-size:12px;
+      color:var(--muted);
+      border:1px solid var(--line);
+      padding:4px 10px;
+      border-radius:999px;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      background: rgba(255,255,255,.03);
+      width:fit-content;
+      flex-wrap:wrap;
+    }
+    .tabs{
+      display:flex; gap:10px; align-items:center;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding:6px;
+      border-radius: 999px;
+    }
+    .tab{
+      border:1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding:10px 14px;
+      border-radius: 999px;
+      cursor:pointer;
+      transition: background .2s ease, border-color .2s ease, color .2s ease;
+      font-weight:700;
+      user-select:none;
+    }
+    .tab.active{
+      color: var(--ink);
+      background: linear-gradient(180deg, rgba(124,92,255,.30), rgba(124,92,255,.14));
+      border-color: rgba(124,92,255,.35);
+    }
+
+    .app{
+      display:grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap:18px;
+    }
+    @media (max-width: 980px){
+      body{ padding:14px; }
+      .app{ grid-template-columns:1fr; }
+      .topbar{ flex-direction:column; align-items:flex-start; gap:10px; }
+      .tabs{ width:100%; justify-content:space-between; }
+      .controls{ justify-content:flex-start; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .header{
+      padding:16px 16px 10px 16px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .title{ display:flex; flex-direction:column; gap:8px; }
+    .title h2{ margin:0; font-size:15px; letter-spacing:.2px; }
+
+    .controls{
+      display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;
+    }
+    button{
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      color: var(--ink);
+      padding:10px 12px;
+      border-radius: 14px;
+      cursor:pointer;
+      transition: transform .05s ease, background .2s ease, border-color .2s ease;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      user-select:none;
+      font-weight:700;
+    }
+    button:hover{ background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.18); }
+    button:active{ transform: translateY(1px); }
+    button.primary{
+      background: linear-gradient(180deg, rgba(124,92,255,.35), rgba(124,92,255,.18));
+      border-color: rgba(124,92,255,.45);
+    }
+    button.good{
+      background: linear-gradient(180deg, rgba(46,229,157,.22), rgba(46,229,157,.10));
+      border-color: rgba(46,229,157,.35);
+    }
+    button.bad{
+      background: linear-gradient(180deg, rgba(255,77,109,.22), rgba(255,77,109,.10));
+      border-color: rgba(255,77,109,.35);
+    }
+
+    .boardWrap{ padding:14px 16px 16px 16px; }
+    .boardFrame{
+      border-radius: 18px;
+      border: 2px solid rgba(255, 223, 102, .45);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      padding:14px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:10px;
+    }
+    @media (max-width: 520px){
+      .grid{ gap:8px; }
+      .boardFrame{ padding:10px; }
+    }
+
+    .cell{
+      border-radius:16px;
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.18);
+      min-height:96px;
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+      user-select:none;
+      position:relative;
+      overflow:hidden;
+    }
+    @media (max-width:520px){
+      .cell{ min-height:86px; padding:9px; }
+    }
+    .cell:hover{ border-color: rgba(255,255,255,.18); background: rgba(0,0,0,.22); }
+    .cell.dragover{ border-color: rgba(124,92,255,.65); box-shadow: 0 0 0 3px rgba(124,92,255,.22) inset; }
+
+    .cell.correct{
+      background: linear-gradient(180deg, rgba(46,229,157,.12), rgba(0,0,0,.18));
+      border-color: rgba(46,229,157,.25);
+    }
+    .cell.incorrect{
+      background: linear-gradient(180deg, rgba(255,77,109,.12), rgba(0,0,0,.18));
+      border-color: rgba(255,77,109,.25);
+    }
+
+    .topRow{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .target{
+      font-size: clamp(18px, 3.1vw, 28px);
+      font-weight:900;
+      letter-spacing:.2px;
+      line-height:1;
+    }
+
+    .opBadge{
+      width:30px;height:30px;
+      display:grid; place-items:center;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      font-weight:900;
+      flex:0 0 auto;
+    }
+    .opBadge.mul{ border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.08); color: var(--accent2); }
+    .opBadge.add{ border-color: rgba(255,204,102,.35); background: rgba(255,204,102,.08); color: var(--warn); }
+    .opBadge.none{ opacity:.75; }
+
+    .status{
+      margin-top:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding:12px 12px;
+      border-radius:16px;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.35;
+    }
+    .status strong{ color:var(--ink); }
+    .ok{ color: var(--good); }
+    .err{ color: var(--bad); }
+
+    /* toast */
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:22px;
+      transform:translateX(-50%);
+      padding:10px 14px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(15,26,46,.9);
+      box-shadow: var(--shadow);
+      color: var(--ink);
+      font-size:13px;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .18s ease, transform .18s ease;
+      z-index:50;
+    }
+    .toast.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
+
+    .chip{
+      width:36px;height:36px;
+      border-radius:13px;
+      display:grid; place-items:center;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      letter-spacing:.2px;
+      font-weight:900;
+    }
+    .chip.small{
+      width:28px;
+      height:28px;
+      border-radius:11px;
+      font-size:13px;
+    }
+
+    .marks{ display:flex; gap:8px; align-items:center; }
+    .mark{
+      width:22px;height:22px;
+      display:grid; place-items:center;
+      border-radius:9px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      font-weight:900;
+      font-size:12px;
+    }
+    .mark.add{ border-color: rgba(255,204,102,.35); background: rgba(255,204,102,.08); color: var(--warn); }
+    .mark.mul{ border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.08); color: var(--accent2); }
+    .mark.off{ opacity:.35; }
+    .mark.over{
+      box-shadow: 0 0 0 3px rgba(255,77,109,.22) inset;
+      border-color: rgba(255,77,109,.55);
+      color: var(--bad);
+      background: rgba(255,77,109,.10);
+    }
+
+    /* slots (simple) */
+    .slots2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      padding-top:8px;
+      border-top:1px dashed rgba(255,255,255,.12);
+    }
+    .slot{
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.03);
+      min-height:40px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:8px 10px;
+      gap:10px;
+      overflow:hidden;
+    }
+    .slot.dragover{
+      border-color: rgba(124,92,255,.65);
+      box-shadow: 0 0 0 3px rgba(124,92,255,.18) inset;
+    }
+
+    /* panel */
+    .panelWrap{ padding:14px 16px 16px 16px; display:flex; flex-direction:column; gap:12px; }
+    .section{
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.10);
+      border-radius:16px;
+      padding:12px;
+    }
+    .sectionHead{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin-bottom:10px;
+    }
+    .sectionHead h3{
+      margin:0;
+      font-size:13px;
+      letter-spacing:.2px;
+      color: rgba(234,240,255,.95);
+    }
+    .mini{ font-size:12px; color: var(--muted); }
+
+    /* Advanced: strip pool */
+    .stripGrid{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:10px;
+    }
+    .stripGridsimple{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap:25px;
+    }
+    @media (max-width:520px){
+      .stripGrid{ gap:8px; }
+    }
+    .stripTok{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      border-radius:14px;
+      min-height:42px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      font-weight:900;
+      user-select:none;
+      cursor:grab;
+    }
+    .stripTok:active{ cursor:grabbing; }
+    .stripTok.used{
+      opacity:.35;
+      cursor:not-allowed;
+    }
+    .stripTok input{
+      width:100%;
+      height:40px;
+      border:none;
+      outline:none;
+      background: transparent;
+      color: var(--ink);
+      font-weight:900;
+      text-align:center;
+      font-size:14px;
+    }
+    .stripTok.badOrder{
+      box-shadow: 0 0 0 3px rgba(255,77,109,.18) inset;
+      border-color: rgba(255,77,109,.35);
+    }
+
+    /* Advanced: pair cards */
+    .pairCards{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap:10px;
+    }
+    @media (max-width:980px){
+      .pairCards{ grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width:520px){
+      .pairCards{ grid-template-columns:1fr; }
+    }
+    .pairCard{
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.15);
+      border-radius:16px;
+      padding:10px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      cursor:grab;
+      user-select:none;
+      transition: border-color .2s ease, background .2s ease, transform .08s ease;
+    }
+    .pairCard:hover{ border-color: rgba(255,255,255,.18); background: rgba(0,0,0,.20); }
+    .pairCard:active{ transform: translateY(1px); cursor:grabbing; }
+    .pairTop{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .pairSlots{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .pairSlot{
+      border-radius:14px;
+      border:1px dashed rgba(255,255,255,.14);
+      background: rgba(255,255,255,.03);
+      min-height:40px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:8px 10px;
+      gap:8px;
+    }
+    .pairSlot.filled{
+      border-style:solid;
+      border-color: rgba(255,255,255,.14);
+      background: rgba(255,255,255,.05);
+      cursor:pointer;
+    }
+
+    /* Footer */
+    .footer{
+      margin-top:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding:12px 14px;
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size:13px;
+      line-height:1.45;
+      box-shadow: var(--shadow);
+    }
+    .footer a{ color: var(--ink); text-decoration: none; border-bottom:1px dashed rgba(255,255,255,.25); }
+    .footer a:hover{ border-bottom-color: rgba(255,255,255,.55); }
+
+    /* Help modal */
+    .modalBack{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:100;
+      padding:18px;
+    }
+    .modalBack.show{ display:flex; }
+    .modal{
+      max-width:680px;
+      width:100%;
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(25,35,60,.96), rgba(15,26,46,.96));
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .modalHead{
+      padding:14px 16px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+    }
+    .modalHead h3{ margin:0; font-size:14px; letter-spacing:.2px; }
+    .modalBody{
+      padding:14px 16px 16px 16px;
+      color: rgba(234,240,255,.92);
+      line-height:1.45;
+      font-size:13px;
+    }
+    .modalBody ul{ margin:10px 0 0 18px; padding:0; color: rgba(234,240,255,.86); }
+    .modalBody li{ margin:6px 0; }
+    .xbtn{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      border-radius: 12px;
+      padding:8px 10px;
+      cursor:pointer;
+      font-weight:900;
+    }
+
+    /* Confetti canvas */
+    #confetti{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index:120;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="confetti"></canvas>
+
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <h1>🧠 Tetonor <span class="pill" id="pillModes">Simple + Avanzado</span></h1>
+        <div class="pill" id="pillHints"></div>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="tabs" role="tablist" aria-label="Modos">
+          <button class="tab" id="tabSimple" role="tab" aria-selected="false">Simple</button>
+          <button class="tab active" id="tabAdv" role="tab" aria-selected="true">Avanzado</button>
+        </div>
+        <button id="btnHelp" title="Help">❔ Help</button>
+      </div>
+    </div>
+
+    <div class="app">
+      <section class="card">
+        <div class="header">
+          <div class="title">
+            <h2 id="modeTitle">Modo Avanzado</h2>
+          </div>
+
+          <div class="controls">
+            <button id="btnNew" class="primary">🎲 Nuevo</button>
+            <button id="btnCheck" class="good">✅ Chequear</button>
+            <button id="btnReset">🧹 Limpiar</button>
+            <button id="btnReveal" class="bad">🧠 Solución</button>
+          </div>
+        </div>
+
+        <div class="boardWrap">
+          <div class="boardFrame">
+            <div id="grid" class="grid"></div>
+          </div>
+          <div id="status" class="status">Listo.</div>
+        </div>
+      </section>
+
+      <aside class="card" id="panelCard"></aside>
+    </div>
+
+    <div class="footer" id="footerText">
+      Si te gustó esta web podes colaborar comprandome un modelito en
+      <a href="https://cults3d.com/en/users/PINGUE3D/3d-models" target="_blank" rel="noopener">https://cults3d.com/en/users/PINGUE3D/3d-models</a><br/>
+      <b>Mateo - PINGÜÉ3D</b>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Help modal -->
+  <div id="helpBack" class="modalBack" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="modalHead">
+        <h3 id="helpTitle">Help</h3>
+        <button class="xbtn" id="helpClose">✕</button>
+      </div>
+      <div class="modalBody" id="helpBody"></div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // i18n (ES/EN)
+    // =========================================================
+    const LANG = (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en";
+    document.documentElement.lang = LANG;
+
+    const I18N = {
+      es: {
+        modesPill: "Simple + Avanzado",
+        hintLeft: "Click izq",
+        hintRight: "Click der",
+        hintDbl: "Doble click",
+        hintMul: "×",
+        hintAdd: "+",
+        hintDel: "borrar celda",
+
+        tabSimple: "Simple",
+        tabAdv: "Avanzado",
+        help: "Ayuda",
+
+        modeSimple: "Modo Simple",
+        modeAdv: "Modo Avanzado",
+
+        newBtn: "🎲 Nuevo",
+        checkBtn: "✅ Chequear",
+        resetBtn: "🧹 Limpiar",
+        revealBtn: "🧠 Solución",
+        hideBtn: "🙈 Ocultar",
+
+        ready: "Listo.",
+        toastNew: "Nuevo puzzle listo.",
+        toastReset: "Limpio.",
+        toastNeedPair: "Arrastrá un par primero.",
+        toastNeedNumber: "Completá el número primero.",
+        toastMissingCells: "Faltan celdas.",
+        toastMissingPairs: "Faltan pares (armá las tarjetas).",
+        toastMissingHoles: "Faltan huecos.",
+        toastOrder: "Pool fuera de orden.",
+        toastPerfect: "¡Perfecto! ✅",
+        toastErrors: "Hay errores ❌",
+
+        helpTitle: "Ayuda",
+        helpSimple: `
+          <b>Modo Simple</b>
+          <ul>
+            <li>Arrastrá <b>dos números</b> a cada celda (slot A y B).</li>
+            <li>Click izq = <b>×</b>, click der = <b>+</b>.</li>
+            <li>Cada número: <b>1 vez en +</b> y <b>1 vez en ×</b>.</li>
+            <li>Doble click en celda: la vacía.</li>
+          </ul>
+        `,
+        helpAdv: `
+          <b>Modo Avanzado</b>
+          <ul>
+            <li>Primero completá los <b>huecos</b> del strip (orden ascendente, repetidos permitidos).</li>
+            <li>Con los números del strip armás <b>8 tarjetas</b> (pares) arrastrando tokens a sus slots.</li>
+            <li>Un token del strip no se puede repetir en otra tarjeta.</li>
+            <li>Arrastrá una tarjeta a la grilla. Click izq = ×, click der = +.</li>
+            <li>Cada tarjeta debe usarse <b>una vez en +</b> y <b>una vez en ×</b>.</li>
+          </ul>
+        `,
+
+        panelAdvTitleStrip: "Pool de números",
+        panelAdvStripPill: "ordenados • completá huecos",
+        panelAdvTitlePairs: "Pool de pares",
+        panelAdvPairsPill: "armá 8 tarjetas • sin repetir tokens",
+        solutionLabel: "Solución:",
+
+        statusAdv: (filledBlanks, blanks, filledPairSlots, filledGrid)=>`Huecos: <strong>${filledBlanks}/${blanks}</strong> • Pares: <strong>${filledPairSlots}/16</strong> • Grilla: <strong>${filledGrid}/16</strong>. `,
+        footerHTML: `
+          Si te gustó esta web podes colaborar comprandome un modelito en
+          <a href="https://cults3d.com/en/users/PINGUE3D/3d-models" target="_blank" rel="noopener">https://cults3d.com/en/users/PINGUE3D/3d-models</a><br/>
+          <b>Mateo - PINGÜÉ3D</b>
+        `
+      },
+      en: {
+        modesPill: "Simple + Advanced",
+        hintLeft: "Left click",
+        hintRight: "Right click",
+        hintDbl: "Double click",
+        hintMul: "×",
+        hintAdd: "+",
+        hintDel: "clear cell",
+
+        tabSimple: "Simple",
+        tabAdv: "Advanced",
+        help: "Help",
+
+        modeSimple: "Simple Mode",
+        modeAdv: "Advanced Mode",
+
+        newBtn: "🎲 New",
+        checkBtn: "✅ Check",
+        resetBtn: "🧹 Clear",
+        revealBtn: "🧠 Solution",
+        hideBtn: "🙈 Hide",
+
+        ready: "Ready.",
+        toastNew: "New puzzle ready.",
+        toastReset: "Cleared.",
+        toastNeedPair: "Drag a pair first.",
+        toastNeedNumber: "Fill the number first.",
+        toastMissingCells: "Some cells are missing.",
+        toastMissingPairs: "Pairs are missing (build the cards).",
+        toastMissingHoles: "Some blanks are missing.",
+        toastOrder: "Pool is not ordered.",
+        toastPerfect: "Perfect! ✅",
+        toastErrors: "There are errors ❌",
+
+        helpTitle: "Help",
+        helpSimple: `
+          <b>Simple Mode</b>
+          <ul>
+            <li>Drag <b>two numbers</b> into each cell (slot A and B).</li>
+            <li>Left click = <b>×</b>, right click = <b>+</b>.</li>
+            <li>Each number: <b>once in +</b> and <b>once in ×</b>.</li>
+            <li>Double click a cell to clear it.</li>
+          </ul>
+        `,
+        helpAdv: `
+          <b>Advanced Mode</b>
+          <ul>
+            <li>First fill the <b>blanks</b> in the strip (ascending order, duplicates allowed).</li>
+            <li>Using strip tokens, build <b>8 pair cards</b> by dragging tokens into their slots.</li>
+            <li>A strip token cannot be reused on another card.</li>
+            <li>Drag a card into the grid. Left click = ×, right click = +.</li>
+            <li>Each card must be used <b>once in +</b> and <b>once in ×</b>.</li>
+          </ul>
+        `,
+
+        panelAdvTitleStrip: "Number pool",
+        panelAdvStripPill: "ordered • fill blanks",
+        panelAdvTitlePairs: "Pair pool",
+        panelAdvPairsPill: "build 8 cards • no token repeats",
+        solutionLabel: "Solution:",
+
+        statusAdv: (filledBlanks, blanks, filledPairSlots, filledGrid)=>`Blanks: <strong>${filledBlanks}/${blanks}</strong> • Pairs: <strong>${filledPairSlots}/16</strong> • Grid: <strong>${filledGrid}/16</strong>. `,
+        footerHTML: `
+          If you liked this site you can support me by buying a model at
+          <a href="https://cults3d.com/en/users/PINGUE3D/3d-models" target="_blank" rel="noopener">https://cults3d.com/en/users/PINGUE3D/3d-models</a><br/>
+          <b>Mateo - PINGÜÉ3D</b>
+        `
+      }
+    };
+
+    const t = (k, ...args)=>{
+      const v = I18N[LANG][k];
+      return (typeof v === "function") ? v(...args) : v;
+    };
+
+    // =========================================================
+    // Shared
+    // =========================================================
+    const toastEl = document.getElementById("toast");
+    const gridEl = document.getElementById("grid");
+    const panelCard = document.getElementById("panelCard");
+    const statusEl = document.getElementById("status");
+
+    const btnNew = document.getElementById("btnNew");
+    const btnCheck = document.getElementById("btnCheck");
+    const btnReset = document.getElementById("btnReset");
+    const btnReveal = document.getElementById("btnReveal");
+
+    const tabSimple = document.getElementById("tabSimple");
+    const tabAdv = document.getElementById("tabAdv");
+    const modeTitle = document.getElementById("modeTitle");
+
+    const btnHelp = document.getElementById("btnHelp");
+    const helpBack = document.getElementById("helpBack");
+    const helpBody = document.getElementById("helpBody");
+    const helpClose = document.getElementById("helpClose");
+
+    const pillModes = document.getElementById("pillModes");
+    const pillHints = document.getElementById("pillHints");
+    const footerText = document.getElementById("footerText");
+
+    const DRAG_TOKEN = "application/x-tetonor-token";
+    const DRAG_PAIR  = "application/x-tetonor-pair";
+
+    let mode = "adv";      // default avanzado
+    let reveal = false;
+
+    function applyI18n(){
+      pillModes.textContent = t("modesPill");
+      pillHints.innerHTML = `
+        <span>${t("hintLeft")} = <b style="color:var(--accent2)">${t("hintMul")}</b></span>
+        <span>${t("hintRight")} = <b style="color:var(--warn)">${t("hintAdd")}</b></span>
+        <span>${t("hintDbl")} = ${t("hintDel")}</span>
+      `;
+
+      tabSimple.textContent = t("tabSimple");
+      tabAdv.textContent = t("tabAdv");
+      btnHelp.innerHTML = `❔ ${t("help")}`;
+      btnHelp.title = t("help");
+
+      btnNew.textContent = t("newBtn");
+      btnCheck.textContent = t("checkBtn");
+      btnReset.textContent = t("resetBtn");
+      btnReveal.textContent = t("revealBtn");
+
+      document.getElementById("helpTitle").textContent = t("helpTitle");
+      footerText.innerHTML = t("footerHTML");
+    }
+
+    function showToast(msg){
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      setTimeout(()=>toastEl.classList.remove("show"), 1400);
+    }
+    function shuffle(arr){
+      for(let i=arr.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]]=[arr[j],arr[i]];
+      }
+      return arr;
+    }
+    function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+    document.addEventListener("contextmenu", (e)=>{
+      if(e.target.closest(".cell")) e.preventDefault();
+    });
+
+    // =========================================================
+    // HELP MODAL
+    // =========================================================
+    function openHelp(){
+      helpBody.innerHTML = (mode==="simple") ? t("helpSimple") : t("helpAdv");
+      helpBack.classList.add("show");
+      helpBack.setAttribute("aria-hidden","false");
+    }
+    function closeHelp(){
+      helpBack.classList.remove("show");
+      helpBack.setAttribute("aria-hidden","true");
+    }
+    btnHelp.addEventListener("click", openHelp);
+    helpClose.addEventListener("click", closeHelp);
+    helpBack.addEventListener("click", (e)=>{ if(e.target===helpBack) closeHelp(); });
+    document.addEventListener("keydown",(e)=>{ if(e.key==="Escape") closeHelp(); });
+
+    // =========================================================
+    // MODE SIMPLE (tal cual lo tenías bien)
+    // =========================================================
+    const SIMPLE = { N:16, puzzle:null, state:null };
+
+    function simpleGenerateTokens(){
+      const vals=[];
+      while(vals.length<SIMPLE.N){
+        const r=Math.random();
+        let v;
+        if(r<0.55) v=randInt(2,10);
+        else if(r<0.85) v=randInt(11,24);
+        else v=randInt(25,48);
+        vals.push(v);
+      }
+      vals.sort((a,b)=>a-b);
+      return vals.map((value,id)=>({id,value}));
+    }
+    function simplePairUp(ids){
+      const pool=ids.slice(); shuffle(pool);
+      const pairs=[];
+      for(let i=0;i<pool.length;i+=2) pairs.push([pool[i],pool[i+1]]);
+      return pairs;
+    }
+    function simpleGeneratePuzzle(){
+      const tokens=simpleGenerateTokens();
+      const ids=tokens.map(t=>t.id);
+      const addPairs=simplePairUp(ids);
+      const mulPairs=simplePairUp(ids);
+
+      const cells=[];
+      for(const [a,b] of addPairs) cells.push({target: tokens[a].value + tokens[b].value, op:"+", aTok:a, bTok:b});
+      for(const [a,b] of mulPairs) cells.push({target: tokens[a].value * tokens[b].value, op:"x", aTok:a, bTok:b});
+
+      shuffle(cells);
+      return {tokens,cells};
+    }
+    function simpleResetState(){
+      SIMPLE.state = Array.from({length:16}, ()=>({aTok:null,bTok:null,op:null}));
+    }
+    function simpleUsage(){
+      const usage=Array.from({length:16}, ()=>({add:0,mul:0}));
+      SIMPLE.state.forEach(s=>{
+        if(s.aTok===null||s.bTok===null||s.op===null) return;
+        const k = s.op==="+" ? "add" : "mul";
+        usage[s.aTok][k]++; usage[s.bTok][k]++;
+      });
+      return usage;
+    }
+    function simpleCellComputedValue(i){
+      const s=SIMPLE.state[i];
+      if(s.aTok===null||s.bTok===null||s.op===null) return null;
+      const a=SIMPLE.puzzle.tokens[s.aTok].value;
+      const b=SIMPLE.puzzle.tokens[s.bTok].value;
+      return (s.op==="+") ? (a+b) : (a*b);
+    }
+
+    function renderSimplePanel(){
+      panelCard.innerHTML = `
+        <div class="header">
+          <div class="title">
+            <h2>${LANG==="es"?"Números disponibles":"Available numbers"}</h2>
+            <div class="pill">${LANG==="es"?"arrastrá a los recuadros":"drag into the boxes"}</div>
+          </div>
+        </div>
+        <div class="panelWrap">
+          <div class="section">
+            <div class="stripGridsimple" id="simpleTokens"></div>
+          </div>
+        </div>
+      `;
+      const tokensEl=document.getElementById("simpleTokens");
+      const usage=simpleUsage();
+      SIMPLE.puzzle.tokens.forEach(tok=>{
+        const el=document.createElement("div");
+        el.className="stripTok";
+        el.draggable=true;
+        el.dataset.tokenId=String(tok.id);
+        const u=usage[tok.id];
+        const addClass = `mark add ${u.add>0?"":"off"} ${u.add>1?"over":""}`;
+        const mulClass = `mark mul ${u.mul>0?"":"off"} ${u.mul>1?"over":""}`;
+        const fullyUsed = (u.add===1 && u.mul===1);
+        if(fullyUsed) el.style.opacity="0.2";
+        el.addEventListener("dragstart",(e)=>{
+          e.dataTransfer.clearData();
+          e.dataTransfer.setData(DRAG_TOKEN, el.dataset.tokenId);
+          e.dataTransfer.setData("text/plain", el.dataset.tokenId);
+          e.dataTransfer.effectAllowed="copy";
+        });
+        el.innerHTML = `
+          <div class="chip">${tok.value}</div>
+          <div class="marks">
+            <span class="${addClass}">+</span>
+            <span class="${mulClass}">×</span>
+          </div>
+        `;
+        tokensEl.appendChild(el);
+      });
+    }
+
+    function renderSimpleGrid(){
+      gridEl.innerHTML="";
+      for(let i=0;i<16;i++){
+        const target=SIMPLE.puzzle.cells[i].target;
+        const s=SIMPLE.state[i];
+
+        const computed = simpleCellComputedValue(i);
+        const isComplete = computed!==null;
+        const isCorrect = isComplete && computed===target;
+
+        const cell=document.createElement("div");
+        cell.className="cell";
+        if(isComplete) cell.classList.add(isCorrect ? "correct" : "incorrect");
+
+        let badgeClass="none", badgeText="?";
+        if(s.op==="+"){ badgeClass="add"; badgeText="+"; }
+        else if(s.op==="x"){ badgeClass="mul"; badgeText="×"; }
+
+        cell.addEventListener("dragover",(e)=>{ e.preventDefault(); cell.classList.add("dragover"); e.dataTransfer.dropEffect="copy"; });
+        cell.addEventListener("dragleave",()=>cell.classList.remove("dragover"));
+        cell.addEventListener("drop",(e)=>{
+          e.preventDefault(); cell.classList.remove("dragover");
+          const raw=e.dataTransfer.getData(DRAG_TOKEN) || e.dataTransfer.getData("text/plain");
+          const tokId=parseInt(raw,10);
+          if(Number.isNaN(tokId)) return;
+          if(s.aTok===null) s.aTok=tokId;
+          else if(s.bTok===null) s.bTok=tokId;
+          else s.aTok=tokId;
+          renderAll();
+        });
+
+        cell.addEventListener("click", ()=>{ s.op="x"; renderAll(); });
+        cell.addEventListener("contextmenu",(e)=>{ e.preventDefault(); s.op="+"; renderAll(); });
+        cell.addEventListener("dblclick", ()=>{ SIMPLE.state[i]={aTok:null,bTok:null,op:null}; renderAll(); });
+
+        function slotHtml(key){
+          const tokId=s[key];
+          if(tokId===null) return `<div class="slot" data-slot="${key}"></div>`;
+          const v=SIMPLE.puzzle.tokens[tokId].value;
+          return `<div class="slot" data-slot="${key}"><span class="chip small">${v}</span></div>`;
+        }
+
+        let revealLine="";
+        if(reveal){
+          const sol=SIMPLE.puzzle.cells[i];
+          const a=SIMPLE.puzzle.tokens[sol.aTok].value;
+          const b=SIMPLE.puzzle.tokens[sol.bTok].value;
+          const sym=sol.op==="x" ? "×" : "+";
+          revealLine = `<div style="margin-top:8px;color:rgba(169,183,214,.9);font-size:12px">
+            ${LANG==="es"?"Solución":"Solution"}: <b style="color:var(--ink)">${a} ${sym} ${b}</b>
+          </div>`;
+        }
+
+        cell.innerHTML = `
+          <div class="topRow">
+            <div class="target">${target}</div>
+            <div class="opBadge ${badgeClass}">${badgeText}</div>
+          </div>
+          <div class="slots2">
+            ${slotHtml("aTok")}
+            ${slotHtml("bTok")}
+          </div>
+          ${revealLine}
+        `;
+        gridEl.appendChild(cell);
+
+        cell.querySelectorAll(".slot").forEach(slot=>{
+          const key=slot.getAttribute("data-slot");
+
+          slot.addEventListener("dragover",(e)=>{
+            e.preventDefault();
+            e.stopPropagation();
+            slot.classList.add("dragover");
+            e.dataTransfer.dropEffect="copy";
+          });
+          slot.addEventListener("dragleave",()=>slot.classList.remove("dragover"));
+          slot.addEventListener("drop",(e)=>{
+            e.preventDefault();
+            e.stopPropagation();
+            slot.classList.remove("dragover");
+            const raw=e.dataTransfer.getData(DRAG_TOKEN) || e.dataTransfer.getData("text/plain");
+            const tokId=parseInt(raw,10);
+            if(Number.isNaN(tokId)) return;
+            s[key]=tokId;
+            renderAll();
+          });
+        });
+      }
+    }
+
+    function simpleCheck(){
+      const incomplete = SIMPLE.state.some(s=>s.aTok===null||s.bTok===null||s.op===null);
+      if(incomplete){
+        showToast(t("toastMissingCells"));
+        statusEl.innerHTML = `<span class="err"><strong>${LANG==="es"?"Incompleto":"Incomplete"}:</strong> ${LANG==="es"?"faltan números y/o operación":"missing numbers and/or operation"}.</span>`;
+        return;
+      }
+
+      let okCells=true;
+      for(let i=0;i<16;i++){
+        const computed=simpleCellComputedValue(i);
+        if(computed!==SIMPLE.puzzle.cells[i].target){ okCells=false; break; }
+      }
+
+      const usage=simpleUsage();
+      const okUsage=usage.every(u=>u.add===1 && u.mul===1);
+
+      if(okCells && okUsage){
+        showToast(t("toastPerfect"));
+        statusEl.innerHTML = `<span class="ok"><strong>${LANG==="es"?"Correcto":"Correct"}:</strong> ${LANG==="es"?"todo coincide y usos OK":"everything matches and usage OK"}.</span>`;
+        confettiBurst();
+      }else{
+        showToast(t("toastErrors"));
+        statusEl.innerHTML = `<span class="err"><strong>${LANG==="es"?"Incorrecto":"Incorrect"}:</strong> ${LANG==="es"?"revisá grilla/usos":"check grid/usage"}.</span>`;
+      }
+    }
+
+    // =========================================================
+    // MODE AVANZADO (nuevo: strip suelto + cards armables + grilla)
+    // =========================================================
+    const ADV = {
+      puzzle:null,
+      state:null
+    };
+
+    function advGenerateStripNumbers(){
+      const nums=[];
+      let cur=randInt(1,6);
+      for(let i=0;i<16;i++){
+        const step = (Math.random()<0.40)?0:(Math.random()<0.75?1:randInt(2,3));
+        cur = Math.min(cur+step, 48);
+        nums.push(cur);
+      }
+      nums.sort((a,b)=>a-b);
+      return nums;
+    }
+
+    function advMaskBlanks(full){
+      const blanksCount=randInt(2,5);
+      const idxs=new Set();
+      while(idxs.size<blanksCount){
+        const i=randInt(0,15);
+        if(i===0||i===15) continue;
+        idxs.add(i);
+      }
+      return full.map((v,i)=>({value: idxs.has(i)?null:v, isBlank: idxs.has(i)}));
+    }
+
+    // solution pairing: se arma internamente, pero el jugador lo reconstruye con cards
+    function advGenerateSolutionPairs(){
+      const idxs=[...Array(16)].map((_,i)=>i);
+      shuffle(idxs);
+      const pairs=[];
+      for(let i=0;i<16;i+=2){
+        pairs.push([idxs[i], idxs[i+1]]);
+      }
+      return pairs; // 8 pares (indices del strip)
+    }
+
+    function advGeneratePuzzle(){
+      const fullStrip=advGenerateStripNumbers();
+      const maskedStrip=advMaskBlanks(fullStrip);
+      const solPairs=advGenerateSolutionPairs(); // pares por indices
+
+      // targets: por cada par -> 2 celdas (+ y ×)
+      const cells=[];
+      for(let p=0;p<8;p++){
+        const [i1,i2]=solPairs[p];
+        const a=fullStrip[i1], b=fullStrip[i2];
+        cells.push({target:a+b, op:"+", pairId:p});
+        cells.push({target:a*b, op:"x", pairId:p});
+      }
+      shuffle(cells);
+
+      return { maskedStrip, solution:{ fullStrip, solPairs }, cells };
+    }
+
+    function advResetState(){
+      ADV.state = {
+        stripGuess: Array.from({length:16}, ()=>null), // para huecos
+        // pair cards armables: 8 tarjetas, cada slot guarda idx del strip (0..15) o null
+        pairCards: Array.from({length:8}, ()=>({a:null,b:null})),
+        // grid: 16 celdas con pairCardId + op
+        grid: Array.from({length:16}, ()=>({cardId:null, op:null}))
+      };
+    }
+
+    function advStripValueAt(idx){
+      const item=ADV.puzzle.maskedStrip[idx];
+      if(!item.isBlank) return item.value;
+      return ADV.state.stripGuess[idx];
+    }
+
+    function advStripTokenUsed(idx){
+      // token usado si está asignado a alguna tarjeta (en a/b)
+      return ADV.state.pairCards.some(c => c.a===idx || c.b===idx);
+    }
+
+    function advAllStripFilled(){
+      for(let i=0;i<16;i++){
+        if(ADV.puzzle.maskedStrip[i].isBlank && advStripValueAt(i)===null) return false;
+      }
+      return true;
+    }
+
+    function advOrderOK(){
+      const vals=Array.from({length:16},(_,i)=>advStripValueAt(i));
+      for(let i=1;i<16;i++){
+        if(vals[i]!==null && vals[i-1]!==null && vals[i] < vals[i-1]) return false;
+      }
+      return true;
+    }
+
+    function advCardReady(cardId){
+      const c=ADV.state.pairCards[cardId];
+      return c.a!==null && c.b!==null && advStripValueAt(c.a)!==null && advStripValueAt(c.b)!==null;
+    }
+
+    function advCardValues(cardId){
+      const c=ADV.state.pairCards[cardId];
+      const a = c.a===null ? null : advStripValueAt(c.a);
+      const b = c.b===null ? null : advStripValueAt(c.b);
+      return {a,b};
+    }
+
+    function advCellComputedValue(cellIdx){
+      const s=ADV.state.grid[cellIdx];
+      if(s.cardId===null || s.op===null) return null;
+      if(!advCardReady(s.cardId)) return null;
+      const {a,b} = advCardValues(s.cardId);
+      if(a===null||b===null) return null;
+      return s.op==="+" ? (a+b) : (a*b);
+    }
+
+    function advCardUsage(){
+      // por tarjeta: cuántas veces se usó en + y en × dentro de la grilla
+      const usage=Array.from({length:8}, ()=>({add:0,mul:0}));
+      ADV.state.grid.forEach(g=>{
+        if(g.cardId===null || g.op===null) return;
+        if(g.op==="+") usage[g.cardId].add++;
+        else usage[g.cardId].mul++;
+      });
+      return usage;
+    }
+
+    function renderAdvPanel(){
+      const blanks = ADV.puzzle.maskedStrip.filter(x=>x.isBlank).length;
+
+      panelCard.innerHTML = `
+        <div class="header">
+          <div class="title">
+            <h2>${t("modeAdv")}</h2>
+          </div>
+        </div>
+        <div class="panelWrap">
+          <div class="section">
+            <div class="sectionHead">
+              <h3>${t("panelAdvTitleStrip")}</h3>
+              <div class="mini">${t("panelAdvStripPill")}</div>
+            </div>
+            <div class="stripGrid" id="stripGrid"></div>
+          </div>
+
+          <div class="section">
+            <div class="sectionHead">
+              <h3>${t("panelAdvTitlePairs")}</h3>
+              <div class="mini">${t("panelAdvPairsPill")}</div>
+            </div>
+            <div class="pairCards" id="pairCards"></div>
+          </div>
+        </div>
+      `;
+
+      // -------- Strip tokens
+      const stripEl=document.getElementById("stripGrid");
+      for(let i=0;i<16;i++){
+        const item=ADV.puzzle.maskedStrip[i];
+        const val=advStripValueAt(i);
+        const used=advStripTokenUsed(i);
+
+        const tok=document.createElement("div");
+        tok.className="stripTok" + (used ? " used":"");
+        tok.dataset.stripIdx=String(i);
+
+        // feedback orden (solo si hay valor)
+        if(val!==null && !advOrderOK()){
+          // marcamos solo los inputs/tokens problemáticos luego (más abajo)
+        }
+
+        if(item.isBlank){
+          // editable
+          tok.innerHTML = `<input inputmode="numeric" pattern="[0-9]*" placeholder="_" value="${val??""}" aria-label="blank ${i}">`;
+          const inp=tok.querySelector("input");
+          inp.addEventListener("input", ()=>{
+            let v = inp.value.replace(/[^\d]/g,"");
+            inp.value=v;
+            ADV.state.stripGuess[i] = (v==="" ? null : parseInt(v,10));
+            renderAll();
+          });
+          // no draggable desde el input directamente
+          inp.addEventListener("mousedown",(e)=>e.stopPropagation());
+          inp.addEventListener("pointerdown",(e)=>e.stopPropagation());
+        }else{
+          tok.textContent = String(item.value);
+        }
+
+        // draggable solo si:
+        // - tiene valor (pre o completado)
+        // - no está usado
+        // - no estás clickenado un input
+        tok.draggable = (!used && advStripValueAt(i)!==null);
+        tok.addEventListener("dragstart",(e)=>{
+          if(used) { e.preventDefault(); return; }
+          if(advStripValueAt(i)===null){ showToast(t("toastNeedNumber")); e.preventDefault(); return; }
+          e.dataTransfer.clearData();
+          e.dataTransfer.setData(DRAG_TOKEN, String(i));     // IMPORTANT: arrastramos idx (no valor)
+          e.dataTransfer.setData("text/plain", String(i));
+          e.dataTransfer.effectAllowed="copy";
+        });
+
+        stripEl.appendChild(tok);
+      }
+
+      // marcamos visualmente tokens “fuera de orden” cuando hay valores vecinos
+      for(let i=0;i<16;i++){
+        const tok=stripEl.children[i];
+        const v=advStripValueAt(i);
+        if(v===null) continue;
+        const prev = i>0 ? advStripValueAt(i-1) : null;
+        const next = i<15 ? advStripValueAt(i+1) : null;
+        let ok=true;
+        if(prev!==null && v<prev) ok=false;
+        if(next!==null && v>next) ok=false;
+        tok.classList.toggle("badOrder", !ok);
+      }
+
+      // -------- Pair cards
+      const cardsEl=document.getElementById("pairCards");
+      const usage=advCardUsage();
+
+      for(let c=0;c<8;c++){
+        const card=document.createElement("div");
+        card.className="pairCard";
+        card.dataset.cardId=String(c);
+        card.draggable = advCardReady(c);
+
+        card.addEventListener("dragstart",(e)=>{
+          if(!advCardReady(c)){ e.preventDefault(); return; }
+          e.dataTransfer.clearData();
+          e.dataTransfer.setData(DRAG_PAIR, String(c));
+          e.dataTransfer.setData("text/plain", String(c));
+          e.dataTransfer.effectAllowed="copy";
+        });
+
+        const aIdx=ADV.state.pairCards[c].a;
+        const bIdx=ADV.state.pairCards[c].b;
+        const aVal = (aIdx===null) ? null : advStripValueAt(aIdx);
+        const bVal = (bIdx===null) ? null : advStripValueAt(bIdx);
+
+        const addOn = usage[c].add>0;
+        const mulOn = usage[c].mul>0;
+
+        card.innerHTML = `
+          <div class="pairTop">
+            <div class="marks">
+              <span class="mark add ${addOn? "" : "off"} ${usage[c].add>1?"over":""}">+</span>
+              <span class="mark mul ${mulOn? "" : "off"} ${usage[c].mul>1?"over":""}">×</span>
+            </div>
+            <div class="mini">${LANG==="es"?"Tarjeta":"Card"} ${c+1}</div>
+          </div>
+          <div class="pairSlots">
+            <div class="pairSlot ${aIdx!==null?"filled":""}" data-slot="a">${aVal!==null? `<span class="chip small">${aVal}</span>` : ""}</div>
+            <div class="pairSlot ${bIdx!==null?"filled":""}" data-slot="b">${bVal!==null? `<span class="chip small">${bVal}</span>` : ""}</div>
+          </div>
+        `;
+        cardsEl.appendChild(card);
+
+        // drop tokens into slots
+        card.querySelectorAll(".pairSlot").forEach(slot=>{
+          const which=slot.getAttribute("data-slot"); // a/b
+
+          slot.addEventListener("dragover",(e)=>{
+            e.preventDefault();
+            e.stopPropagation();
+            slot.classList.add("dragover");
+            e.dataTransfer.dropEffect="copy";
+          });
+          slot.addEventListener("dragleave",()=>slot.classList.remove("dragover"));
+          slot.addEventListener("drop",(e)=>{
+            e.preventDefault();
+            e.stopPropagation();
+            slot.classList.remove("dragover");
+
+            const raw=e.dataTransfer.getData(DRAG_TOKEN) || e.dataTransfer.getData("text/plain");
+            const stripIdx=parseInt(raw,10);
+            if(Number.isNaN(stripIdx)) return;
+
+            if(advStripValueAt(stripIdx)===null){ showToast(t("toastNeedNumber")); return; }
+            if(advStripTokenUsed(stripIdx)){ showToast(LANG==="es"?"Ese token ya está usado.":"That token is already used."); return; }
+
+            // asignar
+            ADV.state.pairCards[c][which] = stripIdx;
+            renderAll();
+          });
+
+          // dblclick en slot lleno => liberar token
+          slot.addEventListener("dblclick", ()=>{
+            if(ADV.state.pairCards[c][which]===null) return;
+            ADV.state.pairCards[c][which]=null;
+            renderAll();
+          });
+        });
+      }
+    }
+
+    function renderAdvGrid(){
+      gridEl.innerHTML="";
+      for(let i=0;i<16;i++){
+        const target=ADV.puzzle.cells[i].target;
+        const s=ADV.state.grid[i];
+
+        const computed=advCellComputedValue(i);
+        const isComplete = computed!==null;
+        const isCorrect = isComplete && computed===target;
+
+        const cell=document.createElement("div");
+        cell.className="cell";
+        if(isComplete) cell.classList.add(isCorrect ? "correct" : "incorrect");
+
+        let badgeClass="none", badgeText="?";
+        if(s.op==="+"){ badgeClass="add"; badgeText="+"; }
+        else if(s.op==="x"){ badgeClass="mul"; badgeText="×"; }
+
+        cell.addEventListener("dragover",(e)=>{ e.preventDefault(); cell.classList.add("dragover"); e.dataTransfer.dropEffect="copy"; });
+        cell.addEventListener("dragleave",()=>cell.classList.remove("dragover"));
+        cell.addEventListener("drop",(e)=>{
+          e.preventDefault(); cell.classList.remove("dragover");
+          const raw=e.dataTransfer.getData(DRAG_PAIR) || e.dataTransfer.getData("text/plain");
+          const cardId=parseInt(raw,10);
+          if(Number.isNaN(cardId)) return;
+          if(!advCardReady(cardId)) return;
+          s.cardId=cardId;
+          renderAll();
+        });
+
+        cell.addEventListener("click", ()=>{
+          s.op="x"; renderAll();
+        });
+        cell.addEventListener("contextmenu",(e)=>{
+          e.preventDefault();
+          s.op="+"; renderAll();
+        });
+        cell.addEventListener("dblclick", ()=>{
+          ADV.state.grid[i]={cardId:null,op:null};
+          renderAll();
+        });
+
+        let entry = ``;
+        if(s.cardId===null){
+          entry = `<div class="slot" style="border-top:1px dashed rgba(255,255,255,.12); padding-top:10px"></div>`;
+        }else{
+          const {a,b}=advCardValues(s.cardId);
+          const sym = (s.op===null) ? "?" : (s.op==="x" ? "×" : "+");
+          entry = `
+            <div class="slot" style="border-top:1px dashed rgba(255,255,255,.12); padding-top:10px">
+              <span style="font-weight:900">${a??"_"} ${sym} ${b??"_"}</span>
+            </div>
+          `;
+        }
+
+        let revealLine="";
+        if(reveal){
+          const sol=ADV.puzzle.cells[i];
+          const [i1,i2]=ADV.puzzle.solution.solPairs[sol.pairId];
+          const a=ADV.puzzle.solution.fullStrip[i1];
+          const b=ADV.puzzle.solution.fullStrip[i2];
+          const sym=sol.op==="x" ? "×" : "+";
+          revealLine = `<div style="margin-top:8px;color:rgba(169,183,214,.9);font-size:12px">
+            ${t("solutionLabel")} <b style="color:var(--ink)">${a} ${sym} ${b}</b>
+          </div>`;
+        }
+
+        cell.innerHTML = `
+          <div class="topRow">
+            <div class="target">${target}</div>
+            <div class="opBadge ${badgeClass}">${badgeText}</div>
+          </div>
+          ${entry}
+          ${revealLine}
+        `;
+        gridEl.appendChild(cell);
+      }
+    }
+
+    function advCheck(){
+      // 1) huecos completos
+      for(let i=0;i<16;i++){
+        if(ADV.puzzle.maskedStrip[i].isBlank && advStripValueAt(i)===null){
+          showToast(t("toastMissingHoles"));
+          statusEl.innerHTML = `<span class="err"><strong>${LANG==="es"?"Incompleto":"Incomplete"}:</strong> ${LANG==="es"?"completá los huecos del strip":"fill strip blanks"}.</span>`;
+          return;
+        }
+      }
+
+      // 2) orden ascendente
+      const vals=Array.from({length:16},(_,i)=>advStripValueAt(i));
+      for(let i=1;i<16;i++){
+        if(vals[i] < vals[i-1]){
+          showToast(t("toastOrder"));
+          statusEl.innerHTML = `<span class="err"><strong>${LANG==="es"?"Error":"Error"}:</strong> ${LANG==="es"?"el strip debe ser ascendente":"strip must be ascending"}.</span>`;
+          return;
+        }
+      }
+
+      // 3) cards completas (16 slots llenos)
+      const filledPairSlots = ADV.state.pairCards.reduce((acc,c)=>acc + (c.a!==null?1:0) + (c.b!==null?1:0), 0);
+      if(filledPairSlots<16){
+        showToast(t("toastMissingPairs"));
+        statusEl.innerHTML = `<span class="err"><strong>${LANG==="es"?"Incompleto":"Incomplete"}:</strong> ${LANG==="es"?"armá los 8 pares":"build the 8 pairs"}.</span>`;
+        return;
+      }
+
+      // 4) grilla completa
+      const incomplete = ADV.state.grid.some(s=>s.cardId===null || s.op===null);
+      if(incomplete){
+        showToast(t("toastMissingCells"));
+        statusEl.innerHTML = `<span class="err"><strong>${LANG==="es"?"Incompleto":"Incomplete"}:</strong> ${LANG==="es"?"faltan tarjetas y/o operación":"missing cards and/or operations"}.</span>`;
+        return;
+      }
+
+      // 5) celdas correctas vs targets
+      let okCells=true;
+      for(let i=0;i<16;i++){
+        const computed=advCellComputedValue(i);
+        if(computed!==ADV.puzzle.cells[i].target){ okCells=false; break; }
+      }
+
+      // 6) uso de tarjetas: +1 y ×1 cada una
+      const usage=advCardUsage();
+      const okUsage=usage.every(u=>u.add===1 && u.mul===1);
+
+      // 7) huecos correctos vs solución (solo blanks)
+      let okBlanks=true;
+      for(let i=0;i<16;i++){
+        if(ADV.puzzle.maskedStrip[i].isBlank){
+          if(vals[i] !== ADV.puzzle.solution.fullStrip[i]) { okBlanks=false; break; }
+        }
+      }
+
+      if(okCells && okUsage && okBlanks){
+        showToast(t("toastPerfect"));
+        statusEl.innerHTML = `<span class="ok"><strong>${LANG==="es"?"Correcto":"Correct"}:</strong> ${LANG==="es"?"grilla OK, huecos OK, usos OK":"grid OK, blanks OK, usage OK"}.</span>`;
+        confettiBurst();
+      }else{
+        showToast(t("toastErrors"));
+        const d=[];
+        if(!okCells) d.push(LANG==="es"?"alguna celda no coincide":"some cell doesn't match");
+        if(!okUsage) d.push(LANG==="es"?"uso de tarjetas incorrecto":"card usage is wrong");
+        if(!okBlanks) d.push(LANG==="es"?"algún hueco está mal":"a blank is wrong");
+        statusEl.innerHTML = `<span class="err"><strong>${LANG==="es"?"Incorrecto":"Incorrect"}:</strong> ${d.join(LANG==="es"?" y ":" and ")}.</span>`;
+      }
+    }
+
+    // =========================================================
+    // Confetti (victory)
+    // =========================================================
+    const confCanvas = document.getElementById("confetti");
+    const ctx = confCanvas.getContext("2d");
+    let confettiParts = [];
+    let confettiRunning = false;
+
+    function resizeConfetti(){
+      confCanvas.width = window.innerWidth;
+      confCanvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeConfetti);
+    resizeConfetti();
+
+    function confettiBurst(){
+      const W = confCanvas.width, H = confCanvas.height;
+      const n = 180;
+      const originX = W/2, originY = H*0.20;
+      for(let i=0;i<n;i++){
+        const ang = (Math.random()*Math.PI*2);
+        const spd = 3 + Math.random()*7;
+        confettiParts.push({
+          x: originX,
+          y: originY,
+          vx: Math.cos(ang)*spd,
+          vy: Math.sin(ang)*spd + 2,
+          g: 0.15 + Math.random()*0.18,
+          w: 4 + Math.random()*6,
+          h: 6 + Math.random()*10,
+          r: Math.random()*Math.PI,
+          vr: (Math.random()-0.5)*0.25,
+          life: 140 + Math.random()*60,
+          alpha: 1
+        });
+      }
+      if(!confettiRunning){
+        confettiRunning = true;
+        requestAnimationFrame(confettiTick);
+      }
+    }
+
+    function confettiTick(){
+      const W = confCanvas.width, H = confCanvas.height;
+      ctx.clearRect(0,0,W,H);
+
+      confettiParts = confettiParts.filter(p=>p.life>0);
+      for(const p of confettiParts){
+        p.life--;
+        p.vy += p.g;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.r += p.vr;
+        if(p.life < 40) p.alpha = Math.max(0, p.life/40);
+
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+
+        // colores simples (sin setear paleta fija): random por frame suave
+        const hue = (p.x*0.3 + p.y*0.2) % 360;
+        ctx.fillStyle = `hsl(${hue}, 90%, 60%)`;
+        ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+        ctx.restore();
+      }
+
+      if(confettiParts.length>0){
+        requestAnimationFrame(confettiTick);
+      }else{
+        confettiRunning = false;
+        ctx.clearRect(0,0,W,H);
+      }
+    }
+
+    // =========================================================
+    // Mode switching + render
+    // =========================================================
+    function setMode(next){
+      mode=next;
+      reveal=false;
+      btnReveal.textContent=t("revealBtn");
+
+      tabSimple.classList.toggle("active", mode==="simple");
+      tabAdv.classList.toggle("active", mode==="adv");
+      tabSimple.setAttribute("aria-selected", mode==="simple" ? "true":"false");
+      tabAdv.setAttribute("aria-selected", mode==="adv" ? "true":"false");
+
+      modeTitle.textContent = (mode==="simple") ? t("modeSimple") : t("modeAdv");
+      newGame();
+    }
+
+    tabSimple.addEventListener("click", ()=>setMode("simple"));
+    tabAdv.addEventListener("click", ()=>setMode("adv"));
+
+    function renderStatus(){
+      if(mode==="simple"){
+        const filled = SIMPLE.state.filter(s=>s.aTok!==null && s.bTok!==null && s.op!==null).length;
+        statusEl.innerHTML = `${LANG==="es"?"Progreso":"Progress"}: <strong>${filled}/16</strong>.`;
+      }else{
+        const blanks = ADV.puzzle.maskedStrip.filter(x=>x.isBlank).length;
+        const filledBlanks = ADV.puzzle.maskedStrip.filter((x,i)=>x.isBlank && advStripValueAt(i)!==null).length;
+        const filledPairSlots = ADV.state.pairCards.reduce((acc,c)=>acc + (c.a!==null?1:0) + (c.b!==null?1:0), 0);
+        const filledGrid = ADV.state.grid.filter(s=>s.cardId!==null && s.op!==null).length;
+        statusEl.innerHTML = t("statusAdv", filledBlanks, blanks, filledPairSlots, filledGrid);
+      }
+    }
+
+    function renderAll(){
+      if(mode==="simple"){
+        renderSimpleGrid();
+        renderSimplePanel();
+      }else{
+        renderAdvGrid();
+        renderAdvPanel();
+      }
+      renderStatus();
+    }
+
+    // =========================================================
+    // Actions
+    // =========================================================
+    function newGame(){
+      if(mode==="simple"){
+        SIMPLE.puzzle = simpleGeneratePuzzle();
+        simpleResetState();
+      }else{
+        ADV.puzzle = advGeneratePuzzle();
+        advResetState();
+      }
+      renderAll();
+      showToast(t("toastNew"));
+    }
+
+    function resetGame(){
+      if(mode==="simple") simpleResetState();
+      else advResetState();
+      renderAll();
+      showToast(t("toastReset"));
+    }
+
+    function checkGame(){
+      if(mode==="simple") simpleCheck();
+      else advCheck();
+    }
+
+    btnNew.addEventListener("click", newGame);
+    btnReset.addEventListener("click", resetGame);
+    btnCheck.addEventListener("click", checkGame);
+    btnReveal.addEventListener("click", ()=>{
+      reveal = !reveal;
+      btnReveal.textContent = reveal ? t("hideBtn") : t("revealBtn");
+      renderAll();
+    });
+
+    // boot
+    applyI18n();
+    setMode("adv");
+  </script>
+</body>
+</html>
