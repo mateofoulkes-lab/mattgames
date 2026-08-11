@@ -75,7 +75,7 @@ function renderStatus(adapter) {
   const relay = infos.filter(x => x.relay).length;
 
   let label = `v${BUILD_VERSION} · Metered`;
-  let state = adapter?.signalState || 'idle';
+  const state = adapter?.signalState || 'idle';
   let cls = 'wait';
 
   if (adapter?.lastError) {
@@ -227,7 +227,13 @@ function createAdapter(options = {}) {
     },
 
     wireDataChannel(remote, dc) {
-      const info = adapter.rtcInfo.get(remote.id) || { state: remote.state || 'idle', turnReady: hasTurnConfigured(remote), relay: false, routeKnown: false, dcOpen: false };
+      const info = adapter.rtcInfo.get(remote.id) || {
+        state: remote.state || 'idle',
+        turnReady: hasTurnConfigured(remote),
+        relay: false,
+        routeKnown: false,
+        dcOpen: false
+      };
       adapter.rtcInfo.set(remote.id, info);
       dc.onopen = async () => {
         info.dcOpen = true;
@@ -340,11 +346,12 @@ function createAdapter(options = {}) {
         const logicalId = adapter.mapRemote(senderPeerId, data.logicalId);
         if (!logicalId) return;
 
-        if (data.kind === 'intro') {
-          adapter.intro(senderPeerId);
-          return;
-        }
+        // Intro only establishes the Metered-ID <-> game-ID mapping.
+        // Do NOT answer another intro here; both peers already announce on join,
+        // and replying would create an endless intro ping-pong.
+        if (data.kind === 'intro') return;
         if (data.kind !== 'action') return;
+
         const action = adapter.actions.get(data.action);
         if (action?.onMessage) action.onMessage(data.payload, { peerId: logicalId });
       });
@@ -399,5 +406,4 @@ export function joinRoom(_config, _roomId, options = {}) {
   return activeAdapter.room;
 }
 
-// Initial badge state before the user joins.
 queueMicrotask(() => renderStatus(activeAdapter));
