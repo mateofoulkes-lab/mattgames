@@ -5,6 +5,7 @@ on:
     paths:
       - 'eltopo/portraitspng/**'
       - 'eltopo/tools/process_portraits.py'
+      - 'eltopo/tools/process_new_portraits.py'
   workflow_dispatch:
 
 permissions:
@@ -21,6 +22,7 @@ jobs:
           python-version: '3.12'
       - run: pip install Pillow
       - run: python eltopo/tools/process_portraits.py
+      - run: python eltopo/tools/process_new_portraits.py
       - name: Commit processed JPGs
         run: |
           git config user.name "github-actions[bot]"
