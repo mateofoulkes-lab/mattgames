@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>NEON//CR</title>
+<style>
+:root{--cyan:#64f7ff;--pink:#ff4fd8;--lime:#7dff68;--yellow:#ffe45e;--violet:#a77bff;--red:#ff5d70;--bg:#020305;--panel:rgba(3,7,12,.82)}
+*{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:#eaffff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+body{touch-action:none;user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;background:radial-gradient(circle at 55% 45%,#081019 0,#020305 58%,#000 100%)}
+.hud{position:fixed;inset:0;pointer-events:none;padding:14px;display:flex;flex-direction:column;justify-content:space-between}
+.top{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}.chip{border:1px solid rgba(100,247,255,.35);background:rgba(0,0,0,.42);box-shadow:0 0 18px rgba(100,247,255,.12) inset,0 0 14px rgba(100,247,255,.08);padding:7px 10px;border-radius:10px;backdrop-filter:blur(8px);text-shadow:0 0 8px currentColor;font-size:12px}.brand{font-weight:900;letter-spacing:.16em;color:var(--cyan)}
+.bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}.tip{max-width:560px;color:#bfe9ef;opacity:.85;font-size:12px;line-height:1.45}.version{opacity:.5;font-size:10px}
+.centerMsg{position:fixed;left:50%;top:16%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;text-shadow:0 0 14px currentColor;letter-spacing:.08em;font-size:14px;opacity:0;transition:opacity .25s}.centerMsg.show{opacity:1}
+.shop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.62);backdrop-filter:blur(9px);padding:16px;z-index:5}.shop.show{display:flex}.shopCard{width:min(920px,100%);max-height:90vh;overflow:auto;border:1px solid rgba(100,247,255,.4);border-radius:18px;padding:18px;background:linear-gradient(180deg,rgba(5,12,18,.97),rgba(0,0,0,.96));box-shadow:0 0 40px rgba(100,247,255,.14),inset 0 0 40px rgba(167,123,255,.06)}
+.shop h1{margin:0 0 4px;font-size:22px;color:var(--cyan);text-shadow:0 0 14px var(--cyan)}.shop p{margin:0 0 16px;color:#9fc7d0;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.upgrade{pointer-events:auto;text-align:left;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.025);color:white;padding:12px;border-radius:13px;cursor:pointer;transition:.15s}.upgrade:hover{transform:translateY(-1px);border-color:rgba(100,247,255,.6);box-shadow:0 0 18px rgba(100,247,255,.12)}.upgrade:disabled{opacity:.35;cursor:not-allowed;transform:none}.uTitle{font-weight:800;margin-bottom:4px}.uDesc{font-size:11px;color:#a8bec6;line-height:1.35}.uCost{margin-top:8px;color:var(--yellow);font-size:12px;text-shadow:0 0 8px var(--yellow)}.shopFoot{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}.btn{pointer-events:auto;border:1px solid rgba(100,247,255,.55);background:rgba(100,247,255,.08);color:var(--cyan);padding:10px 16px;border-radius:999px;font:inherit;cursor:pointer;text-shadow:0 0 8px currentColor}.btn:hover{background:rgba(100,247,255,.15)}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.hud{padding:9px}.chip{font-size:10px;padding:6px 8px}.tip{font-size:10px;max-width:68vw}.shopCard{padding:14px}.shop h1{font-size:18px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="hud">
+  <div class="top">
+    <div class="chip brand">NEON//CR</div>
+    <div class="chip">PUNTOS <b id="score">0</b></div>
+    <div class="chip">CRÉDITOS <b id="credits">0</b></div>
+    <div class="chip">TIRO <b id="turn">1</b></div>
+    <div class="chip">CADENA x<b id="chain">0</b></div>
+  </div>
+  <div class="bottom">
+    <div class="tip">Arrastrá desde el cañón para apuntar y soltar. La trayectoria tiene gravedad. Cada color reacciona distinto y puede activar a los demás.</div>
+    <div class="version">v0.1.0</div>
+  </div>
+</div>
+<div id="centerMsg" class="centerMsg"></div>
+<div id="shop" class="shop">
+  <div class="shopCard">
+    <h1>INTERFASE DE MEJORAS</h1>
+    <p>Gastá créditos ganados en la reacción anterior. Las mejoras son permanentes durante la partida.</p>
+    <div id="upgradeGrid" class="grid"></div>
+    <div class="shopFoot"><span class="chip">CRÉDITOS DISPONIBLES: <b id="shopCredits">0</b></span><button id="continueBtn" class="btn">SIGUIENTE TIRO →</button></div>
+  </div>
+</div>
+<script>
+(()=>{
+'use strict';
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id);
+const scoreEl=$('score'),creditsEl=$('credits'),turnEl=$('turn'),chainEl=$('chain'),shop=$('shop'),shopCredits=$('shopCredits'),upgradeGrid=$('upgradeGrid'),centerMsg=$('centerMsg');
+let W=innerWidth,H=innerHeight,dpr=Math.min(devicePixelRatio||1,2),last=performance.now(),acc=0;
+const fixed=1/120;
+const state={score:0,credits:0,turn:1,chain:0,shotActive:false,aiming:false,shot:null,nodes:[],particles:[],waves:[],trails:[],settleTimer:0,spawnSeed:1,up:{power:0,size:0,bounce:0,split:0,mult:0}};
+const colors={right:'#64f7ff',left:'#ff4fd8',split4:'#7dff68',split2:'#ffe45e',grow:'#a77bff'};
+const types=['right','left','split4','split2','grow'];
+const labels={right:'→',left:'←',split4:'✣',split2:'◇',grow:'◉'};
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+addEventListener('resize',resize);resize();
+function cannon(){return{x:Math.max(48,W*.075),y:H-Math.max(52,H*.11)}}
+function rand(a,b){return a+Math.random()*(b-a)}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function dist2(a,b){const x=a.x-b.x,y=a.y-b.y;return x*x+y*y}
+function neonStroke(color,blur=18,width=2){ctx.strokeStyle=color;ctx.lineWidth=width;ctx.shadowColor=color;ctx.shadowBlur=blur}
+function neonFill(color,blur=18){ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=blur}
+function resetGlow(){ctx.shadowBlur=0;ctx.globalAlpha=1}
+function addNode(x,y,type,r=8){state.nodes.push({x,y,type,r,baseR:r,alive:true,triggered:false,pulse:Math.random()*6.28})}
+function spawnField(){state.nodes=[];const c=cannon();const margin=55;const minX=Math.max(170,W*.2),maxX=W-margin,minY=80,maxY=H-90;const count=clamp(Math.floor((W*H)/21000),24,64);let tries=0;while(state.nodes.length<count&&tries++<1200){const x=rand(minX,maxX),y=rand(minY,maxY);if(Math.hypot(x-c.x,y-c.y)<130)continue;if(state.nodes.every(n=>Math.hypot(x-n.x,y-n.y)>28))addNode(x,y,types[(Math.random()*types.length)|0],rand(6.5,9.5));}}
+function msg(t){centerMsg.textContent=t;centerMsg.classList.add('show');clearTimeout(msg.t);msg.t=setTimeout(()=>centerMsg.classList.remove('show'),900)}
+function shoot(vx,vy){const c=cannon();const r=11+state.up.size*2;state.shot={x:c.x+20,y:c.y-20,vx,vy,r,life:0,bounces:1+state.up.bounce,alive:true};state.shotActive=true;state.chain=0;state.settleTimer=0;}
+function trigger(n,sourcePower=1){if(!n.alive||n.triggered)return;n.triggered=true;n.alive=false;state.chain++;const mult=(1+state.up.mult*.18);const gain=Math.round((10+state.chain*2)*mult);state.score+=gain;state.credits+=Math.max(1,Math.round(gain*.12));burst(n.x,n.y,colors[n.type],16+Math.min(18,state.chain));
+ if(n.type==='right')pulseProjectile(n.x,n.y,220+state.up.power*18,0,colors[n.type],sourcePower);
+ if(n.type==='left')pulseProjectile(n.x,n.y,-220-state.up.power*18,0,colors[n.type],sourcePower);
+ if(n.type==='split2'){for(const a of [-.58,.58])pulseProjectile(n.x,n.y,Math.cos(a)*190,Math.sin(a)*190,colors[n.type],sourcePower*.9)}
+ if(n.type==='split4'){for(let i=0;i<4;i++){const a=i*Math.PI/2;pulseProjectile(n.x,n.y,Math.cos(a)*180,Math.sin(a)*180,colors[n.type],sourcePower*.85)}}
+ if(n.type==='grow')state.waves.push({x:n.x,y:n.y,r:n.baseR,prev:n.baseR,max:n.baseR*10,life:0,color:colors[n.type]});
+}
+function pulseProjectile(x,y,vx,vy,color,power=1){state.particles.push({kind:'pulse',x,y,vx:vx*power,vy:vy*power,r:5,life:0,max:2.8,color})}
+function burst(x,y,color,count){for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,s=rand(35,190);state.particles.push({kind:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:rand(1,2.5),life:0,max:rand(.35,1.1),color})}}
+function hitNodes(obj,extra=0){for(const n of state.nodes){if(!n.alive)continue;const rr=obj.r+n.r+extra;if(dist2(obj,n)<=rr*rr)trigger(n,1)}}
+function update(dt){
+ for(const n of state.nodes)n.pulse+=dt*3;
+ if(state.shot?.alive){const s=state.shot;s.life+=dt;s.vy+=390*dt;s.x+=s.vx*dt;s.y+=s.vy*dt;state.trails.push({x:s.x,y:s.y,life:0,max:.35,color:'#ffffff'});hitNodes(s);if(s.x+s.r>W||s.x-s.r<0){if(s.bounces>0){s.vx*=-.68;s.x=clamp(s.x,s.r,W-s.r);s.bounces--}else s.alive=false}if(s.y+s.r>H){if(s.bounces>0){s.vy*=-.58;s.y=H-s.r;s.bounces--}else s.alive=false}if(s.y<-80||s.life>8)s.alive=false;}
+ for(const p of state.particles){p.life+=dt;if(p.kind==='spark'){p.vx*=Math.pow(.08,dt);p.vy*=Math.pow(.08,dt);p.vy+=80*dt;p.x+=p.vx*dt;p.y+=p.vy*dt}else{p.x+=p.vx*dt;p.y+=p.vy*dt;hitNodes(p,2);if(p.x<-50||p.x>W+50||p.y<-50||p.y>H+50)p.life=p.max}}
+ state.particles=state.particles.filter(p=>p.life<p.max);
+ for(const w of state.waves){w.life+=dt;w.prev=w.r;w.r=Math.min(w.max,w.r+210*dt);for(const n of state.nodes){if(!n.alive)continue;const d=Math.hypot(n.x-w.x,n.y-w.y);if(d<=w.r+n.r&&d>=w.prev-n.r-8)trigger(n,.96)}}state.waves=state.waves.filter(w=>w.r<w.max||w.life<.35);
+ for(const t of state.trails)t.life+=dt;state.trails=state.trails.filter(t=>t.life<t.max);
+ const active=state.shot?.alive||state.particles.some(p=>p.kind==='pulse')||state.waves.length;
+ if(state.shotActive&&!active){state.settleTimer+=dt;if(state.settleTimer>.55)endTurn()}else if(active)state.settleTimer=0;
+ scoreEl.textContent=state.score;creditsEl.textContent=state.credits;turnEl.textContent=state.turn;chainEl.textContent=state.chain;
+}
+function endTurn(){state.shotActive=false;state.shot=null;openShop();}
+const upgrades=[
+ {k:'power',name:'IMPULSO',desc:'Aumenta la fuerza máxima del cañón y acelera proyectiles de reacción.',base:28,max:6},
+ {k:'size',name:'NÚCLEO',desc:'Aumenta el radio de la munición principal, facilitando contactos.',base:34,max:5},
+ {k:'bounce',name:'REBOTE',desc:'Suma rebotes antes de que el proyectil principal se apague.',base:45,max:4},
+ {k:'split',name:'MUNICIÓN INESTABLE',desc:'Al primer impacto, tu proyectil emite pulsos secundarios adicionales.',base:52,max:4},
+ {k:'mult',name:'AMPLIFICADOR',desc:'Aumenta el valor de cada reacción dentro de una cadena.',base:60,max:5}
+];
+function cost(u){const lv=state.up[u.k];return Math.round(u.base*Math.pow(1.7,lv))}
+function openShop(){shop.classList.add('show');renderShop()}
+function renderShop(){shopCredits.textContent=state.credits;upgradeGrid.innerHTML='';for(const u of upgrades){const lv=state.up[u.k],c=cost(u),b=document.createElement('button');b.className='upgrade';b.disabled=lv>=u.max||state.credits<c;b.innerHTML=`<div class="uTitle">${u.name} · NIVEL ${lv}/${u.max}</div><div class="uDesc">${u.desc}</div><div class="uCost">${lv>=u.max?'MÁXIMO':c+' CR'}</div>`;b.onclick=()=>{if(state.credits>=c&&lv<u.max){state.credits-=c;state.up[u.k]++;creditsEl.textContent=state.credits;renderShop()}};upgradeGrid.appendChild(b)}}
+$('continueBtn').onclick=()=>{shop.classList.remove('show');state.turn++;state.chain=0;if(state.nodes.filter(n=>n.alive).length<12)spawnField();msg('NUEVO TIRO')};
+function updateAim(e){if(!state.aiming)return;const c=cannon();state.aim={x:e.clientX,y:e.clientY};const dx=c.x-e.clientX,dy=c.y-e.clientY;const mag=Math.hypot(dx,dy)||1;const max=220+state.up.power*24,scale=Math.min(max,mag*1.35)/mag;state.aimVel={x:dx*scale,y:dy*scale};}
+canvas.addEventListener('pointerdown',e=>{if(shop.classList.contains('show')||state.shotActive)return;const c=cannon();if(Math.hypot(e.clientX-c.x,e.clientY-c.y)<95){state.aiming=true;canvas.setPointerCapture(e.pointerId);updateAim(e)}});
+canvas.addEventListener('pointermove',updateAim);
+canvas.addEventListener('pointerup',e=>{if(!state.aiming)return;updateAim(e);state.aiming=false;const v=state.aimVel;if(v){shoot(v.x,v.y);if(state.up.split>0){setTimeout(()=>{if(!state.shot?.alive)return;const s=state.shot;for(let i=0;i<state.up.split;i++){const a=(i-(state.up.split-1)/2)*.22;pulseProjectile(s.x,s.y,s.vx*.72*Math.cos(a)-s.vy*.72*Math.sin(a),s.vx*.72*Math.sin(a)+s.vy*.72*Math.cos(a),'#ffffff',.9)}},180)}}state.aim=null;state.aimVel=null;});
+function drawGrid(){ctx.save();ctx.globalAlpha=.13;ctx.strokeStyle='#18384a';ctx.lineWidth=1;const step=42;for(let x=(performance.now()*.004)%step;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}ctx.restore()}
+function draw(){ctx.clearRect(0,0,W,H);drawGrid();
+ for(const t of state.trails){ctx.save();ctx.globalAlpha=1-t.life/t.max;neonFill(t.color,10);ctx.beginPath();ctx.arc(t.x,t.y,2,0,Math.PI*2);ctx.fill();ctx.restore()}
+ for(const w of state.waves){ctx.save();ctx.globalAlpha=.75*(1-w.r/w.max);neonStroke(w.color,24,2);ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.stroke();ctx.restore()}
+ for(const n of state.nodes){if(!n.alive)continue;const pulse=1+Math.sin(n.pulse)*.12;ctx.save();neonFill(colors[n.type],20);ctx.globalAlpha=.86;ctx.beginPath();ctx.arc(n.x,n.y,n.r*pulse,0,Math.PI*2);ctx.fill();ctx.globalAlpha=.9;ctx.fillStyle='#041015';ctx.shadowBlur=0;ctx.font=`${Math.max(8,n.r+2)}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(labels[n.type],n.x,n.y+.5);ctx.restore()}
+ for(const p of state.particles){ctx.save();ctx.globalAlpha=1-p.life/p.max;neonFill(p.color,p.kind==='pulse'?18:10);ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.restore()}
+ if(state.shot?.alive){const s=state.shot;ctx.save();neonFill('#fff',26);ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#64f7ff';ctx.lineWidth=2;ctx.stroke();ctx.restore()}
+ drawCannon();resetGlow();}
+function drawCannon(){const c=cannon();ctx.save();ctx.translate(c.x,c.y);const aim=state.aimVel?Math.atan2(state.aimVel.y,state.aimVel.x):-.5;ctx.rotate(aim);neonStroke('#64f7ff',18,3);ctx.beginPath();ctx.moveTo(-14,0);ctx.lineTo(26,0);ctx.stroke();ctx.strokeStyle='#ff4fd8';ctx.shadowColor='#ff4fd8';ctx.beginPath();ctx.moveTo(-6,-8);ctx.lineTo(15,-8);ctx.stroke();ctx.restore();ctx.save();neonStroke('#a77bff',14,2);ctx.beginPath();ctx.arc(c.x,c.y,22,0,Math.PI*2);ctx.stroke();ctx.restore();if(state.aiming&&state.aim&&state.aimVel){ctx.save();ctx.setLineDash([5,7]);neonStroke('#ffe45e',14,1.5);ctx.beginPath();ctx.moveTo(c.x,c.y);ctx.lineTo(state.aim.x,state.aim.y);ctx.stroke();ctx.setLineDash([]);predict(c.x+20,c.y-20,state.aimVel.x,state.aimVel.y);ctx.restore()}}
+function predict(x,y,vx,vy){ctx.save();ctx.globalAlpha=.45;for(let i=0;i<28;i++){const t=i*.07,px=x+vx*t,py=y+vy*t+.5*390*t*t;if(py>H||px>W||px<0)break;neonFill('#ffffff',8);ctx.beginPath();ctx.arc(px,py,1.5,0,Math.PI*2);ctx.fill()}ctx.restore()}
+function loop(now){let dt=Math.min(.03,(now-last)/1000);last=now;acc+=dt;while(acc>=fixed){update(fixed);acc-=fixed}draw();requestAnimationFrame(loop)}
+spawnField();msg('ARRASTRÁ DESDE EL CAÑÓN');requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
