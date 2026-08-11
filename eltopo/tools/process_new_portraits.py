@@ -32,3 +32,5 @@ for filename, name in NEW_PORTRAITS.items():
     if (OUT / f'{name}.jpg').exists():
         manifest.append({'source': filename, 'slot': 1, 'type': 'single', 'name': name, 'size': list(TARGET), 'file': f'portraits/{name}.jpg'})
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+
+print('New portrait batch processed.')
