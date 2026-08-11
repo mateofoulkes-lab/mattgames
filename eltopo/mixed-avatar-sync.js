@@ -3,11 +3,19 @@
 // Once identities are shuffled, every visible avatar follows the public/impersonated name,
 // so the original profile photo cannot reveal who is really behind an account.
 
+const BUILD_VERSION = '0.7.1';
 const realAvatarByName = new Map();
 let applying = false;
 
 function cleanName(text='') {
   return text.replace(/\s*\(vos\)\s*$/i, '').trim();
+}
+
+function ensureVisibleVersion() {
+  const badge = document.getElementById('connectionBadge');
+  if (!badge) return;
+  const next = badge.textContent.replace(/^v\d+\.\d+\.\d+/, `v${BUILD_VERSION}`);
+  if (next !== badge.textContent) badge.textContent = next;
 }
 
 function isMixedGame() {
@@ -44,6 +52,7 @@ function applyMixedAvatars() {
   if (applying) return;
   applying = true;
   try {
+    ensureVisibleVersion();
     rememberLobbyAvatars();
     if (!isMixedGame()) return;
 
