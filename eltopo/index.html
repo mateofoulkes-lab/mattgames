@@ -8,11 +8,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=0.5.0" />
-  <link rel="stylesheet" href="./v050.css?v=0.5.0" />
+  <link rel="stylesheet" href="./styles.css?v=0.6.0" />
+  <link rel="stylesheet" href="./v050.css?v=0.6.0" />
+  <style>
+    #versionBadge{display:none!important}
+    .metered-status{position:fixed;right:8px;bottom:7px;z-index:99999;font:600 10px/1.25 Inter,system-ui,sans-serif;color:#fff;background:rgba(17,27,33,.9);padding:5px 8px;border-radius:8px;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.22);max-width:min(92vw,430px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .metered-status.ok{background:rgba(0,128,105,.94)}
+    .metered-status.wait{background:rgba(17,27,33,.9)}
+    .metered-status.error{background:rgba(176,0,47,.94)}
+  </style>
 </head>
 <body>
-  <div id="versionBadge" style="position:fixed;right:8px;bottom:6px;z-index:99999;font:600 10px/1.2 Inter,system-ui,sans-serif;color:rgba(255,255,255,.86);background:rgba(17,27,33,.86);padding:4px 7px;border-radius:8px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.18)">v0.5.0 · 0 peers</div>
+  <div id="versionBadge">v0.5.0 · 0 peers</div>
+  <div id="meteredStatus" class="metered-status wait">v0.6.0 · Metered · sin conectar</div>
   <div id="app">
     <section id="landing" class="landing screen active">
       <div class="landing-card">
@@ -22,7 +30,7 @@
         <label class="field-label" for="playerName">Tu nombre</label>
         <input id="playerName" class="text-input" maxlength="20" autocomplete="name" placeholder="Ej. Mateo" />
         <button id="createRoomBtn" class="primary-btn">Entrar a la sala de prueba</button>
-        <p style="margin:14px 0 0;color:#667781;font-size:12px;line-height:1.4">Modo temporal: todos entran a una única sala. Con 2 jugadores ya se puede probar la partida completa.</p>
+        <p style="margin:14px 0 0;color:#667781;font-size:12px;line-height:1.4">Prueba de conectividad Metered: todos entran al lobby exclusivo <strong>topo-global-v1</strong>. Probalo también desde dos redes distintas.</p>
         <p id="landingError" class="error-text"></p>
       </div>
     </section>
@@ -112,6 +120,15 @@
     </div>
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script type="module" src="./app.js?v=0.5.0"></script>
+
+  <script src="https://unpkg.com/@metered-ca/realtime@1/dist/index.umd.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "https://esm.sh/trystero@0.25.3": "./metered-trystero-adapter.js?v=0.6.0"
+    }
+  }
+  </script>
+  <script type="module" src="./app.js?v=0.6.0"></script>
 </body>
 </html>
