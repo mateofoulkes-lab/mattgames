@@ -1,0 +1,26 @@
+name: Validate El Topo
+
+on:
+  push:
+    paths:
+      - 'eltopo/**/*.js'
+      - 'eltopo/index.html'
+      - 'eltopo/social.css'
+      - '.github/workflows/validate-eltopo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check social game syntax
+        run: node --check eltopo/social-game.js
+      - name: Check Metered adapter syntax
+        run: node --check eltopo/metered-trystero-adapter.js
