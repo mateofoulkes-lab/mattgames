@@ -1,0 +1,32 @@
+name: Apply El Topo v0.8.2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v082.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply v0.8.2 patch
+        run: python eltopo/tools/apply_v082.py
+      - name: Validate JavaScript syntax
+        run: |
+          node --check eltopo/social-game.js
+          node --check eltopo/game-data.js
+          node --check eltopo/mixed-avatar-sync.js
+      - name: Commit v0.8.2
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add eltopo
+          git commit -m "Redesign Todo mezclado voting and results" || exit 0
+          git push
