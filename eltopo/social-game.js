@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.9.0';
+import { AVATARS } from './game-data.js?v=0.9.1';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.9.0';
+const VERSION = '0.9.1';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -106,7 +106,7 @@ function freshState(){
   return {
     roomCode:'', adminId:null, mode:null, phase:'lobby', started:false,
     members:{}, lobbyMessages:[], messages:[], trigger:'', guesses:{}, scores:null,
-    final:false, reveal:null, createdAt:now(), roomLocked:false, chatDisabled:false, pinnedMessageId:null, adminForcedSpyId:null, mixedVoting:{closing:false,deadline:0,reason:''}, spyfall:{votes:{},result:null}
+    final:false, reveal:null, createdAt:now(), roomLocked:false, chatDisabled:false, pinnedMessageId:null, adminForcedSpyId:null, adminForcedTrigger:null, mixedVoting:{closing:false,deadline:0,reason:''}, spyfall:{votes:{},result:null}
   };
 }
 
@@ -301,6 +301,12 @@ function roomSuperadminCommand(p){
     case 'edit-message': {const m=state.messages.find(m=>m.id===p.messageId);if(m&&!m.system)m.text=String(p.value||'').slice(0,1000);broadcastFullState();break;}
     case 'pin-message': state.pinnedMessageId=p.value||null;if(p.value)addSystem('📌 El superadmin fijó un mensaje.');broadcastFullState();break;
     case 'force-trigger': state.trigger=String(p.value||'').slice(0,500);if(state.trigger)addSystem(`💬 Nuevo disparador: ${state.trigger}`);broadcastFullState();break;
+    case 'force-next-trigger': state.adminForcedTrigger=String(p.value||'').slice(0,500)||null;addLobbySystem(state.adminForcedTrigger?'🧪 Próximo disparador fijado por superadmin.':'🧪 Próximo disparador vuelve a ser aleatorio.');broadcastFullState();break;
+    case 'force-winner': {
+      if(state.mode==='mixed'&&p.targetId&&state.members[p.targetId]){const scores={};players().forEach(m=>scores[m.id]=m.id===p.targetId?99:0);const reveal=Object.fromEntries(players().map(m=>[m.id,{shown:displayName(m),real:m.realName}]));const payload={scores,reveal,guesses:state.guesses};send('mixed-final',payload).catch(()=>{});onMixedFinal(payload);}
+      else if(state.mode==='spyfall'){const spyWins=p.value==='spy';const result=spyWins?'Resultado forzado por superadmin: gana el espía.':'Resultado forzado por superadmin: gana el grupo.';const payload={result,spyId:state._spyId,spyName:state.members[state._spyId]?.realName||'?',location:state._spyLocation||'?',votes:state.spyfall.votes};send('spy-final',payload).catch(()=>{});onSpyFinal(payload);}
+      break;
+    }
     case 'force-spy': state.adminForcedSpyId=p.targetId||null;addLobbySystem(p.targetId?`🧪 Próximo espía fijado por superadmin.`:'🧪 Próximo espía vuelve a ser aleatorio.');broadcastFullState();break;
     case 'simulate-votes': simulateVotesForQA(); break;
     case 'set-vote': {
@@ -440,7 +446,7 @@ function startMixed(ids){
     name:state.members[id].realName,
     avatar:state.members[id].lobbyAvatar||state.members[id].avatar||null
   }]));
-  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.trigger=personalizeMixedTrigger(pick(TRIGGERS),identities); state.messages=[]; replyingTo=null; lastMixedIntroTrigger=''; clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); enterMessenger();
+  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.trigger=state.adminForcedTrigger||personalizeMixedTrigger(pick(TRIGGERS),identities); state.adminForcedTrigger=null; state.messages=[]; replyingTo=null; lastMixedIntroTrigger=''; clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); enterMessenger();
   ids.forEach((actorId,i)=>{
     const targetId=assigned[i]; const target=identities[targetId];
     state.members[actorId].publicName=target.name;
@@ -603,7 +609,7 @@ function onPersonaChoice(p,cid){
   const persona=p.persona; state.members[cid].persona=persona; state.members[cid].publicName=persona.name; state.members[cid].avatar=persona.avatar; state.members[cid].occupation=persona.occupation; state.members[cid].detail=persona.detail;
   broadcastRoster();
   if(players().every(m=>m.persona)){
-    state.phase='playing'; state.trigger=pick(TRIGGERS);
+    state.phase='playing'; state.trigger=state.adminForcedTrigger||pick(TRIGGERS); state.adminForcedTrigger=null;
     addSystem(`🕶️ Todos tienen identidad. Disparador: ${state.trigger}`);
     const payload={state:snapshotForClient()}; send('incognito-start',payload).catch(()=>{}); renderAll();
   }
