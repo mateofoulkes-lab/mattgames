@@ -1,0 +1,34 @@
+name: Apply El Topo v0.9.0
+on:
+  push:
+    paths:
+      - 'eltopo/tools/apply_v090_superadmin_suite.py'
+      - '.github/workflows/apply-v090.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply v0.9.0 client hooks
+        run: python eltopo/tools/apply_v090_superadmin_suite.py
+      - name: Validate JavaScript
+        run: |
+          node --check eltopo/social-game.js
+          node --check eltopo/mixed-avatar-sync.js
+          node --check eltopo/superadmin/admin.js
+      - name: Commit v0.9.0
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add eltopo/social-game.js eltopo/index.html eltopo/mixed-avatar-sync.js
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'Add full El Topo superadmin operations suite'
+            git push
+          fi
