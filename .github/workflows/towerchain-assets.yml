@@ -1,4 +1,4 @@
-name: Tower Chain assets
+name: Tower Chain gameplay tuning
 
 on:
   push:
@@ -15,30 +15,13 @@ permissions:
   contents: write
 
 jobs:
-  install-assets:
+  tune-gameplay:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download prepared Tower Chain assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p towerchain/assets/generated
-          curl -fL --retry 3 'https://at.adobe.com/aCtvmrR1Q8FkVclS' -o towerchain/assets/generated/towers_atlas.webp
-          curl -fL --retry 3 'https://at.adobe.com/lQLDYDKeXRqrswH6' -o towerchain/assets/generated/enemies_early_atlas.webp
-          curl -fL --retry 3 'https://at.adobe.com/ATaklBdgJmFfv9PB' -o towerchain/assets/generated/enemies_late_atlas.webp
-          curl -fL --retry 3 'https://at.adobe.com/3YiPQZYPVWE3uVyl' -o towerchain/assets/generated/cupcake_atlas.webp
-          curl -fL --retry 3 'https://at.adobe.com/Z937azaSHkckvFM9' -o towerchain/assets/generated/projectiles_atlas.webp
-          curl -fL --retry 3 'https://at.adobe.com/iZ6Nyqn5K1JU8qvk' -o towerchain/assets/generated/effects_atlas.webp
-          curl -fL --retry 3 'https://at.adobe.com/ZTRgkcokp8WSzNSr' -o towerchain/assets/generated/cards_atlas.webp
-          curl -fL --retry 3 'https://at.adobe.com/Vwqk9EF2yftHfK21' -o towerchain/assets/generated/battlefield.jpg
-          curl -fL --retry 3 'https://at.adobe.com/KJCRP45VmTnLxrsq' -o towerchain/assets/generated/splash.jpg
-          curl -fL --retry 3 'https://at.adobe.com/KBpFyD1uDHel53p1' -o towerchain/assets/generated/hud_transparent.png
-          file towerchain/assets/generated/*
-
-      - name: Tune gameplay and lightning visuals
+      - name: Tune enemy health, mixing and lightning visuals
         shell: python
         run: |
           from pathlib import Path
@@ -46,21 +29,16 @@ jobs:
           p = Path('towerchain/game.js')
           s = p.read_text()
 
-          # Enemy base HP is one third of the previous values. The existing wave
-          # multiplier in spawn() keeps increasing max HP as the run advances.
           start = s.index('function enemyDef(w){')
           end = s.index('function spawn(){')
           enemy_def = """function enemyDef(w){if(w<7)return{set:'enemies',row:0,hp:12,spd:148,size:62};if(w<14)return{set:'enemies',row:1,hp:23,spd:141,size:75};if(w<21)return{set:'enemies',row:2,hp:32,spd:162,size:78};if(w<28)return{set:'enemies',row:3,hp:42,spd:150,size:70};if(w<34)return{set:'enemies',row:4,hp:63,spd:130,size:82};if(w<40)return{set:'enemies',row:5,hp:87,spd:136,size:90};if(w<46)return{set:'enemies',row:6,hp:110,spd:128,size:82};if(w<51)return{set:'enemies',row:7,hp:143,spd:123,size:82};if(w<56)return{set:'late_enemies',row:3,hp:217,spd:118,size:105};if(w<60)return{set:'late_enemies',row:6,hp:300,spd:111,size:120};return{set:'late_enemies',row:7,hp:4167,spd:64,size:Math.min(H*.72,560),boss:true}}"""
           s = s[:start] + enemy_def + s[end:]
 
-          # Occasionally bring back an older enemy type. Its HP still scales with
-          # the current wave, so it remains relevant instead of becoming trivial.
           spawn_start = s.index('function spawn(){')
           spawn_end = s.index('function shoot(t){')
           spawn_fn = """function spawn(){let sourceWave=state.wave;if(state.wave>8&&state.wave<60&&Math.random()<.28){sourceWave=Math.max(1,state.wave-(3+Math.floor(Math.random()*Math.min(16,state.wave-1))))}let d=enemyDef(sourceWave);if(state.wave===60&&state.bossSpawned)return;if(d.boss)state.bossSpawned=true;let lane=Math.random()*2-1,spawnX=W+d.size*.75,startY=H*(.615+lane*.022),midY=H*(.635+lane*.135),endY=H*(.735+lane*.018),hpScale=1+state.wave*.035;state.enemies.push({x:spawnX,y:startY,spawnX,startY,midY,endY,lane,hp:d.hp*hpScale,max:d.hp*hpScale,spd:d.spd*(1+state.wave*.004),size:d.size,set:d.set,row:d.row,frame:0,anim:0,boss:d.boss,burn:0,slow:0,attack:0,attackClock:0,dps:d.boss?7:.48+state.wave*.017})}"""
           s = s[:spawn_start] + spawn_fn + s[spawn_end:]
 
-          # Preserve visible lightning arcs.
           hit_start = s.index('function hit(e,s){')
           hit_end = s.index('function chooseCards(')
           hit_fn = """function hit(e,s){let dmg=s.damage*(Math.random()<state.crit?2:1);e.hp-=dmg;e.burn=Math.max(e.burn,state.fire*4);e.slow=Math.max(e.slow,state.ice);state.fx.push({x:e.x,y:e.y,t:.18,type:0});if(state.explosion)for(const o of state.enemies)if(o!==e&&Math.hypot(o.x-e.x,o.y-e.y)<95)o.hp-=state.explosion;if(state.lightning){let source=e;for(const o of state.enemies.filter(o=>o!==e&&o.hp>0).sort((a,b)=>Math.hypot(a.x-e.x,a.y-e.y)-Math.hypot(b.x-e.x,b.y-e.y)).slice(0,state.lightning)){o.hp-=dmg*.35;state.fx.push({x:o.x,y:o.y,t:.18,type:1,x1:source.x,y1:source.y,x2:o.x,y2:o.y});source=o}}}"""
@@ -68,13 +46,13 @@ jobs:
 
           p.write_text(s)
 
-      - name: Commit runtime art and tuning
+      - name: Commit gameplay tuning
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add towerchain/assets/generated towerchain/game.js
+          git add towerchain/game.js
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Lower Tower Chain enemy health and mix enemy types'
           git push
