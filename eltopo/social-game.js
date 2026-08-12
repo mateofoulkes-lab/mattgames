@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.0';
+import { AVATARS } from './game-data.js?v=0.10.1';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.0';
+const VERSION = '0.10.1';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -516,17 +516,21 @@ function mixedRequiredVotes(){ const n=players().length; return Math.max(0,n*(n-
 function mixedSubmittedVotes(){
   let total=0;
   for(const [voterId,ballot] of Object.entries(state.guesses||{})){
-    for(const targetId of Object.keys(ballot||{})) if(voterId!==targetId&&state.members[targetId]&&!state.members[targetId].spectator) total++;
+    const voter=state.members[voterId]; if(!voter||voter.spectator||voter.online===false)continue;
+    for(const targetId of Object.keys(ballot||{})){
+      const target=state.members[targetId]; if(voterId!==targetId&&target&&!target.spectator&&target.online!==false)total++;
+    }
   }
   return total;
 }
 function mixedTargetVoteCount(targetId){
-  return Object.entries(state.guesses||{}).reduce((n,[voterId,ballot])=>n+(voterId!==targetId&&ballot?.[targetId]?1:0),0);
+  return Object.entries(state.guesses||{}).reduce((n,[voterId,ballot])=>{const voter=state.members[voterId],target=state.members[targetId];return n+(voter&&voter.online!==false&&!voter.spectator&&target&&target.online!==false&&!target.spectator&&voterId!==targetId&&ballot?.[targetId]?1:0);},0);
 }
 function mixedVoteBreakdown(targetId){
   const counts={};
   for(const [voterId,ballot] of Object.entries(state.guesses||{})){
-    if(voterId===targetId)continue;
+    const voter=state.members[voterId],target=state.members[targetId];
+    if(voterId===targetId||!voter||voter.online===false||voter.spectator||!target||target.online===false||target.spectator)continue;
     const name=ballot?.[targetId]; if(name)counts[name]=(counts[name]||0)+1;
   }
   return Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
@@ -571,7 +575,7 @@ function castGuess(targetId,realName){
   send('guess',{targetId,realName}).catch(()=>{}); closeGenericModal(); renderAll(); maybeStartAutoMixedCountdown();
 }
 function onGuess(p,cid){
-  if(state.mode!=='mixed'||state.final||!p?.targetId||!state.members[p.targetId])return;
+  if(state.mode!=='mixed'||state.final||!p?.targetId||!state.members[p.targetId]||state.members[p.targetId].online===false||!state.members[cid]||state.members[cid].online===false)return;
   state.guesses[cid] ||= {}; state.guesses[cid][p.targetId]=String(p.realName||''); renderAll(); maybeStartAutoMixedCountdown();
 }
 function finalizeMixed(){ beginMixedCountdown('admin'); }
@@ -580,8 +584,9 @@ function completeMixedFinal(){
   clearInterval(mixedCountdownTicker); state.final=true; state.phase='finished';
   const scores={}; players().forEach(m=>{scores[m.id]=0;});
   for(const [voterId,ballot] of Object.entries(state.guesses||{})){
+    const voter=state.members[voterId]; if(!voter||voter.spectator||voter.online===false)continue;
     for(const [targetId,guessName] of Object.entries(ballot||{})){
-      const target=state.members[targetId]; if(!target||target.spectator||voterId===targetId)continue;
+      const target=state.members[targetId]; if(!target||target.spectator||target.online===false||voterId===targetId)continue;
       if(guessName===target.realName) scores[voterId]=(scores[voterId]||0)+1;
       else scores[targetId]=(scores[targetId]||0)+1;
     }
@@ -678,6 +683,7 @@ function startSpyfall(ids){
   });
   state._spyId=spyId; state._spyLocation=location.name;
   addSystem('🕵️ Spyfall comenzó. Las preguntas se hacen por turnos.');
+  addSystem(`🎤 Es el turno de ${displayName(state.members[currentSpyTurnId()])} de preguntar.`);
   const publicState=snapshotForClient();
   send('spy-start',{state:publicState}).catch(()=>{}); renderAll();
 }
@@ -711,6 +717,7 @@ function onSpyQuestion(p,cid){
   state.messages.push(msg); send('chat',msg).catch(()=>{}); renderMessages();
   state.spyfall.turnIndex=Number(state.spyfall.turnIndex||0)+1;
   const turn={turnOrder:state.spyfall.turnOrder,turnIndex:state.spyfall.turnIndex}; send('spy-turn',turn).catch(()=>{}); onSpyTurn(turn);
+  const next=state.members[currentSpyTurnId()]; if(next)addSystem(`🎤 Es el turno de ${displayName(next)} de preguntar.`);
 }
 function onSpyTurn(p){ if(state.mode!=='spyfall'||state.final)return; state.spyfall.turnOrder=p?.turnOrder||state.spyfall.turnOrder||[]; state.spyfall.turnIndex=Number(p?.turnIndex||0); renderGameBar(); }
 function beginSpyFinalVoting(){
