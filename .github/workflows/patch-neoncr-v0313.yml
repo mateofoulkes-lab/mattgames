@@ -1,0 +1,34 @@
+name: Patch NEON v0.3.13
+on:
+  push:
+    paths: ['.github/workflows/patch-neoncr-v0313.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch collapsible legend
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          old=".legend{position:fixed;right:11px;top:50%;transform:translateY(-50%);pointer-events:none;display:flex;flex-direction:column;gap:5px;opacity:.72;font-size:9px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;margin-right:5px}"
+          new=".legend{position:fixed;left:11px;top:54px;z-index:12;pointer-events:auto;display:block;opacity:.9;font-size:9px;min-width:152px;border:1px solid #67f8ff2e;background:#0009;border-radius:9px;backdrop-filter:blur(7px);overflow:hidden}.legendHead{width:100%;border:0;background:#67f8ff0c;color:#9edee8;padding:5px 7px;font:inherit;font-weight:1000;letter-spacing:.12em;text-align:left;cursor:pointer}.legendHead b{float:right;color:#67f8ff}.legendItems{display:flex;flex-direction:column;gap:4px;padding:6px 8px 7px}.legend.collapsed .legendItems{display:none}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;margin-right:5px}"
+          if old not in s: raise SystemExit('legend css not found')
+          s=s.replace(old,new)
+          s=s.replace("@media(max-width:700px){.grid{grid-template-columns:1fr}.legend{display:none}","@media(max-width:700px){.grid{grid-template-columns:1fr}.legend{top:50px;left:8px;min-width:138px}")
+          oldjs="function renderLegend(){ui.legend.innerHTML=availableTypes().map(k=>`<div style=\"color:${C[k]}\"><span class=\"dot\"></span>${L[k]} ${nodeInfo[k].name.toLowerCase()}</div>`).join('')}"
+          newjs="function renderLegend(){let collapsed=localStorage.getItem('neon_legend_collapsed')==='1';ui.legend.classList.toggle('collapsed',collapsed);ui.legend.innerHTML=`<button class=\"legendHead\">NODOS <b>${collapsed?'＋':'−'}</b></button><div class=\"legendItems\">${availableTypes().map(k=>`<div style=\"color:${C[k]}\"><span class=\"dot\"></span>${L[k]} ${nodeInfo[k].name.toLowerCase()}</div>`).join('')}</div>`;ui.legend.querySelector('.legendHead').onclick=()=>{let c=!ui.legend.classList.contains('collapsed');ui.legend.classList.toggle('collapsed',c);localStorage.setItem('neon_legend_collapsed',c?'1':'0');renderLegend()}}"
+          if oldjs not in s: raise SystemExit('renderLegend not found')
+          s=s.replace(oldjs,newjs)
+          s=s.replace('v0.3.12','v0.3.13')
+          p.write_text(s)
+          PY
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Move node legend under HUD and make it collapsible"
+          git push
