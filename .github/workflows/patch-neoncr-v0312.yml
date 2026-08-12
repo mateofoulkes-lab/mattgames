@@ -1,0 +1,75 @@
+name: Patch NEON v0.3.12
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v0312.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch airborne specials
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          s=s.replace('v0.3.11','v0.3.12')
+
+          # Track timed special appearance per cannon shot.
+          old="shopTab:'cannon',specials:[],up:{"
+          new="shopTab:'cannon',specials:[],specialSpawnTimer:-1,specialSpawnDone:false,up:{"
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # Specials must NOT exist at sector start.
+          old="state.shotsMax=(state.sector<7?4:state.sector<14?5:6)+state.up.shots;state.shotsLeft=state.shotsMax;spawnSectorSpecials();renderLegend();"
+          new="state.shotsMax=(state.sector<7?4:state.sector<14?5:6)+state.up.shots;state.shotsLeft=state.shotsMax;state.specialSpawnTimer=-1;state.specialSpawnDone=false;renderLegend();"
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # Rename semantics: this is an airborne opportunity roll.
+          old="function spawnSectorSpecials(){let coinChance=state.up.coinNode*.18,bombChance=state.up.bombNode*.14;if(Math.random()<coinChance)addSpecial('coin');if(Math.random()<bombChance)addSpecial('bomb');if(state.up.coinNode>=3&&Math.random()<coinChance*.35)addSpecial('coin')}"
+          new="function spawnAirborneSpecials(){if(!state.shot?.alive||state.specialSpawnDone)return;state.specialSpawnDone=true;let coinChance=state.up.coinNode*.18,bombChance=state.up.bombNode*.14;if(Math.random()<coinChance)addSpecial('coin');if(Math.random()<bombChance)addSpecial('bomb');if(state.up.coinNode>=3&&Math.random()<coinChance*.35)addSpecial('coin')}"
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # Every shot gets a small random delay before its special-node roll.
+          old="function shoot(vx,vy){state.shot=makeShot(vx,vy);muzzleBlast(vx,vy);state.shotActive=true;"
+          new="function shoot(vx,vy){state.shot=makeShot(vx,vy);state.specials=[];state.specialSpawnTimer=rand(.18,.75);state.specialSpawnDone=false;muzzleBlast(vx,vy);state.shotActive=true;"
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # Remove unclaimed specials immediately when the cannon ball dies.
+          old="function killShot(s){if(!s.alive)return;s.alive=false;let cd=cannonDefs[state.cannonLevel];"
+          new="function killShot(s){if(!s.alive)return;s.alive=false;state.specials=[];state.specialSpawnTimer=-1;let cd=cannonDefs[state.cannonLevel];"
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # During flight, count down and spawn. Never outside flight.
+          old="function update(dt){for(let n of state.nodes){"
+          new="function update(dt){if(state.shot?.alive&&!state.specialSpawnDone&&state.specialSpawnTimer>=0){state.specialSpawnTimer-=dt;if(state.specialSpawnTimer<=0)spawnAirborneSpecials()}for(let n of state.nodes){"
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # Specials are clickable DURING shot flight; ordinary aiming stays blocked then.
+          old="canvas.addEventListener('pointerdown',e=>{if(ui.shop.classList.contains('show')||ui.intro.classList.contains('show')||state.shotActive||state.clearCelebrating)return;if(clickSpecial(e.clientX,e.clientY))return;try{"
+          new="canvas.addEventListener('pointerdown',e=>{if(ui.shop.classList.contains('show')||ui.intro.classList.contains('show')||state.clearCelebrating)return;if(state.shot?.alive&&clickSpecial(e.clientX,e.clientY))return;if(state.shotActive)return;try{"
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # Defensive cleanup when a turn settles.
+          old="function endTurn(){state.shotActive=false;state.shot=null;let alive="
+          new="function endTurn(){state.shotActive=false;state.shot=null;state.specials=[];state.specialSpawnTimer=-1;let alive="
+          assert old in s
+          s=s.replace(old,new,1)
+
+          p.write_text(s)
+          PY
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Spawn special nodes only during cannon flight"
+          git push
