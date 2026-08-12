@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Download prepared Tower Chain assets
         shell: bash
         run: |
@@ -37,7 +38,7 @@ jobs:
           curl -fL --retry 3 'https://at.adobe.com/KBpFyD1uDHel53p1' -o towerchain/assets/generated/hud_transparent.png
           file towerchain/assets/generated/*
 
-      - name: Tune paths, attacks and tower progression
+      - name: Tune gameplay and lightning visuals
         shell: python
         run: |
           from pathlib import Path
@@ -46,27 +47,25 @@ jobs:
           p = Path('towerchain/game.js')
           s = p.read_text()
 
-          if 'cardsPicked:0' not in s:
-              s = s.replace('levels:{},paused:false', 'levels:{},cardsPicked:0,paused:false')
-          s = s.replace('state.towerLevel=Math.min(20,state.towerLevel+1);', 'state.cardsPicked++;state.towerLevel=Math.min(20,1+Math.floor(state.cardsPicked/5));')
-
+          # Keep the established pathing/tower progression, but ease enemy speed ~12%.
           start = s.index('function enemyDef(w){')
-          end = s.index('function shoot(t){')
-          replacement = """function enemyDef(w){if(w<7)return{set:'enemies',row:0,hp:35,spd:168,size:62};if(w<14)return{set:'enemies',row:1,hp:70,spd:160,size:75};if(w<21)return{set:'enemies',row:2,hp:95,spd:184,size:78};if(w<28)return{set:'enemies',row:3,hp:125,spd:170,size:70};if(w<34)return{set:'enemies',row:4,hp:190,spd:148,size:82};if(w<40)return{set:'enemies',row:5,hp:260,spd:154,size:90};if(w<46)return{set:'enemies',row:6,hp:330,spd:146,size:82};if(w<51)return{set:'enemies',row:7,hp:430,spd:140,size:82};if(w<56)return{set:'late_enemies',row:3,hp:650,spd:134,size:105};if(w<60)return{set:'late_enemies',row:6,hp:900,spd:126,size:120};return{set:'late_enemies',row:7,hp:12500,spd:72,size:Math.min(H*.72,560),boss:true}}function spawn(){let d=enemyDef(state.wave);if(state.wave===60&&state.bossSpawned)return;if(d.boss)state.bossSpawned=true;let lane=Math.random()*2-1,spawnX=W+d.size*.75,startY=H*(.615+lane*.022),midY=H*(.635+lane*.135),endY=H*(.735+lane*.018);state.enemies.push({x:spawnX,y:startY,spawnX,startY,midY,endY,lane,hp:d.hp*(1+state.wave*.035),max:d.hp*(1+state.wave*.035),spd:d.spd*(1+state.wave*.004),size:d.size,set:d.set,row:d.row,frame:0,anim:0,boss:d.boss,burn:0,slow:0,attack:0,attackClock:0,dps:d.boss?7:.48+state.wave*.017})}"""
-          s = s[:start] + replacement + s[end:]
+          end = s.index('function spawn(){')
+          enemy_def = """function enemyDef(w){if(w<7)return{set:'enemies',row:0,hp:35,spd:148,size:62};if(w<14)return{set:'enemies',row:1,hp:70,spd:141,size:75};if(w<21)return{set:'enemies',row:2,hp:95,spd:162,size:78};if(w<28)return{set:'enemies',row:3,hp:125,spd:150,size:70};if(w<34)return{set:'enemies',row:4,hp:190,spd:130,size:82};if(w<40)return{set:'enemies',row:5,hp:260,spd:136,size:90};if(w<46)return{set:'enemies',row:6,hp:330,spd:128,size:82};if(w<51)return{set:'enemies',row:7,hp:430,spd:123,size:82};if(w<56)return{set:'late_enemies',row:3,hp:650,spd:118,size:105};if(w<60)return{set:'late_enemies',row:6,hp:900,spd:111,size:120};return{set:'late_enemies',row:7,hp:12500,spd:64,size:Math.min(H*.72,560),boss:true}}"""
+          s = s[:start] + enemy_def + s[end:]
 
-          s = s.replace("let interval=Math.max(.34,.95-state.wave*.009);if(state.spawnClock>interval){state.spawnClock=0;spawn();if(state.wave>=8&&Math.random()<Math.min(.55,state.wave/100))spawn()}",
-                        "let interval=Math.max(.24,.72-state.wave*.006);if(state.spawnClock>interval){state.spawnClock=0;spawn();if(state.wave>=6&&Math.random()<Math.min(.72,.18+state.wave*.009))spawn()}")
+          # Replace hit() so lightning stores visible source/target arcs.
+          hit_start = s.index('function hit(e,s){')
+          hit_end = s.index('function chooseCards(')
+          hit_fn = """function hit(e,s){let dmg=s.damage*(Math.random()<state.crit?2:1);e.hp-=dmg;e.burn=Math.max(e.burn,state.fire*4);e.slow=Math.max(e.slow,state.ice);state.fx.push({x:e.x,y:e.y,t:.18,type:0});if(state.explosion)for(const o of state.enemies)if(o!==e&&Math.hypot(o.x-e.x,o.y-e.y)<95)o.hp-=state.explosion;if(state.lightning){let source=e;for(const o of state.enemies.filter(o=>o!==e&&o.hp>0).sort((a,b)=>Math.hypot(a.x-e.x,a.y-e.y)-Math.hypot(b.x-e.x,b.y-e.y)).slice(0,state.lightning)){o.hp-=dmg*.35;state.fx.push({x:o.x,y:o.y,t:.18,type:1,x1:source.x,y1:source.y,x2:o.x,y2:o.y});source=o}}}"""
+          s = s[:hit_start] + hit_fn + s[hit_end:]
 
-          if 'const flowerX=W*.205' not in s:
-              a = s.index('for(const e of state.enemies){')
-              b = s.index('for(const s of state.shots){')
-              enemy_loop = """const flowerX=W*.205,flowerY=H*.74;for(const e of state.enemies){e.anim+=dt;if(e.anim>.16){e.anim=0;if(!e.attack)e.frame=1-e.frame}if(e.burn>0){e.hp-=state.fire*dt;e.burn-=dt}if(!e.attack){let targetX=flowerX+(e.boss?e.size*.2:Math.max(32,e.size*.34)),den=Math.max(1,e.spawnX-targetX),progress=Math.max(0,Math.min(1,(e.spawnX-e.x)/den)),smooth=t=>t*t*(3-2*t);if(progress<.52){let q=smooth(progress/.52);e.y=e.startY+(e.midY-e.startY)*q}else{let q=smooth((progress-.52)/.48);e.y=e.midY+(e.endY-e.midY)*q}e.x-=e.spd*(1-(e.slow||0))*dt;if(e.x<=targetX){e.x=targetX;e.y=e.endY;e.attack=1;e.frame=2;e.anim=0}}else{e.frame=2;e.attackClock+=dt;e.y+=(e.endY-e.y)*Math.min(1,dt*5);state.hp-=e.dps*dt;if(state.hp<=0){state.hp=0;sync();return end(false)}}}"""
-              s = s[:a] + enemy_loop + s[b:]
-
-          if 'towerScale=1+(state.towerLevel-1)*.065' not in s:
-              s = s.replace("let ti=Math.max(0,Math.min(19,state.towerLevel-1));drawSprite('towers',Math.floor(ti/4),ti%4,W*.115,H*.70,Math.min(H*.38,280));",
-                            "let ti=Math.max(0,Math.min(19,state.towerLevel-1)),towerBase=Math.min(H*.30,230),towerScale=1+(state.towerLevel-1)*.065;drawSprite('towers',Math.floor(ti/4),ti%4,W*.115,H*.70,towerBase*towerScale);")
+          # Replace the FX renderer with circles + jagged vector lightning bolts.
+          old = "for(const f of state.fx){X.globalAlpha=Math.min(1,f.t*8);X.beginPath();X.arc(f.x,f.y,28*(1-f.t),0,Math.PI*2);X.fillStyle=f.type?'#a264ff':'#ffb12a';X.fill();X.globalAlpha=1}"
+          new = "for(const f of state.fx){X.globalAlpha=Math.min(1,f.t*8);if(f.type===1&&f.x1!==undefined){let pts=7,dx=f.x2-f.x1,dy=f.y2-f.y1,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;X.save();X.lineCap='round';X.lineJoin='round';X.shadowBlur=16;X.shadowColor='#73d9ff';X.strokeStyle='#68cfff';X.lineWidth=7;X.beginPath();X.moveTo(f.x1,f.y1);for(let i=1;i<pts;i++){let q=i/pts,j=(Math.random()-.5)*18;X.lineTo(f.x1+dx*q+nx*j,f.y1+dy*q+ny*j)}X.lineTo(f.x2,f.y2);X.stroke();X.shadowBlur=5;X.strokeStyle='#f4fbff';X.lineWidth=2;X.stroke();X.restore()}else{X.beginPath();X.arc(f.x,f.y,28*(1-f.t),0,Math.PI*2);X.fillStyle=f.type?'#a264ff':'#ffb12a';X.fill()}X.globalAlpha=1}"
+          if old in s:
+              s = s.replace(old, new)
+          elif "if(f.type===1&&f.x1!==undefined)" not in s:
+              raise SystemExit('FX renderer pattern not found')
 
           p.write_text(s)
 
@@ -78,5 +77,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add towerchain/assets/generated towerchain/game.js
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'Install Tower Chain art assets and gameplay tuning'
+          git commit -m 'Tune Tower Chain speed and lightning visuals'
           git push
