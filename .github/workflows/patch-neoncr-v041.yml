@@ -1,0 +1,130 @@
+name: Patch NEON v0.4.1
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v041.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch UFO, victory and chromatic audio
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          lines=s.splitlines()
+
+          def replace_line(prefix,new):
+              global lines
+              for i,line in enumerate(lines):
+                  if line.startswith(prefix):
+                      lines[i]=new
+                      return
+              raise SystemExit(f'missing line: {prefix}')
+
+          # version
+          s='\n'.join(lines)
+          s=s.replace('v0.4.0','v0.4.1')
+          lines=s.splitlines()
+
+          # state: late-game UFOs + sector score bookkeeping
+          for i,line in enumerate(lines):
+              if line.startswith('const state='):
+                  line=line.replace('sweeps:[],trails:[]','sweeps:[],ufos:[],trails:[]')
+                  line=line.replace('boomUsed:false,up:','boomUsed:false,ufoSpawnTimer:-1,sectorStartScore:0,up:')
+                  lines[i]=line
+                  break
+          else: raise SystemExit('state not found')
+
+          # chromatic scale: exact semitone per exploded node, no time-gap reset
+          replace_line('function reactionSound(type)',
+          "function reactionSound(type){let step=state.noteStep++,f=261.63*Math.pow(2,step/12);while(f>2093)f/=2;state.lastNodeHit=performance.now();tone(f,.085,'sine',.028);tone(f*2,.045,'triangle',.008,.008)}")
+
+          # sector reset + remember score at sector start + clear UFOs
+          for i,line in enumerate(lines):
+              if line.startswith('function spawnSector()'):
+                  line=line.replace('state.trails=[];state.specials=[];','state.trails=[];state.specials=[];state.ufos=[];')
+                  line=line.replace('state.noteStep=0;state.lastNodeHit=0;','state.noteStep=0;state.lastNodeHit=0;state.ufoSpawnTimer=-1;state.sectorStartScore=state.score;')
+                  lines[i]=line
+                  break
+          else: raise SystemExit('spawnSector not found')
+
+          # one single victory banner; huge one-shot spectacle and true x3 score for the sector
+          replace_line('function levelClear()',
+          "function levelClear(){if(state.levelCleared||state.nodes.some(n=>n.alive))return;let oneShot=state.shotsLeft===state.shotsMax-1,earned=Math.max(0,state.score-state.sectorStartScore);if(state.shot)killShot(state.shot);state.shot=null;state.shotActive=false;state.specials=[];state.ufos=[];state.ufoSpawnTimer=-1;state.specialSpawnTimer=-1;state.parts=[];state.waves=[];state.beams=[];state.sweeps=[];ui.shotControls.classList.remove('show');state.levelCleared=true;state.clearCelebrating=true;state.superAwarded=true;let bonus=280+state.sector*70+state.shotsLeft*65+Math.min(450,state.chain*7);if(oneShot)state.score+=earned*2;state.score+=bonus*10*(oneShot?3:1);addCredits(bonus,W*.5,H*.4);ui.combo.classList.add('super','show');ui.combo.innerHTML=oneShot?'¡NIVEL SUPERADO!<br><span style=\"font-size:.48em\">¡DE UN TIRO! · PUNTOS ×3</span><br><span class=\"coin clearCoin\">$</span> '+bonus:'¡NIVEL SUPERADO!<br><span class=\"coin clearCoin\">$</span> '+bonus;state.flash=1;state.shake=oneShot?48:30;let blasts=oneShot?18:9;for(let i=0;i<blasts;i++)setTimeout(()=>burst(rand(W*.08,W*.92),rand(H*.1,H*.8),i%4===0?'#fff':i%4===1?C.right:i%4===2?C.left:'#ffe35c',oneShot?62:46,oneShot?520:420),i*(oneShot?55:85));let notes=oneShot?[261.63,329.63,392,523.25,659.25,783.99,1046.5,1318.5,1568]:[261.63,329.63,392,523.25,659.25,783.99,1046.5];notes.forEach((f,i)=>tone(f,oneShot?.45:.34,i<2?'triangle':'sine',oneShot?.05:.035,i*(oneShot?.055:.07)));setTimeout(()=>{ui.combo.classList.remove('show','super');state.clearCelebrating=false;if(state.levelCleared&&!state.nodes.some(n=>n.alive)){let bonus2=30+state.sector*10+state.shotsLeft*16;addCredits(bonus2);openShop('success')}},oneShot?2300:1850)}")
+
+          # shoot schedules a very rare UFO from sector 5; do NOT reset chromatic scale here
+          for i,line in enumerate(lines):
+              if line.startswith('function makeShot('):
+                  line=line.replace("state.specialSpawnDone=false;muzzleBlast(vx,vy);","state.specialSpawnDone=false;state.ufoSpawnTimer=state.sector>=5&&Math.random()<.12?rand(.35,2.1):-1;muzzleBlast(vx,vy);")
+                  line=line.replace('state.chain=0;state.noteStep=0;state.lastNodeHit=0;state.settle=0;','state.chain=0;state.settle=0;')
+                  line=line.replace("function killShot(s){if(!s.alive)return;s.alive=false;","function killShot(s){if(!s.alive)return;s.alive=false;state.noteStep=0;state.lastNodeHit=0;state.ufoSpawnTimer=-1;")
+                  lines[i]=line
+                  break
+          else: raise SystemExit('shoot line not found')
+
+          # UFO helper functions, inserted just before stepShotPhysics
+          for i,line in enumerate(lines):
+              if line.startswith('function stepShotPhysics('):
+                  helpers="function spawnUfo(){if(state.sector<5||!state.shot?.alive)return;let dir=Math.random()<.5?1:-1,y=rand(88,Math.max(120,H*.58)),r=30;state.ufos.push({x:dir>0?-70:W+70,y,baseY:y,vx:dir*rand(220,320),dir,r,phase:rand(0,6.28),lastHit:-9999});tone(190,.08,'sine',.014)}function hitUfo(s,u){let now=performance.now();if(now-u.lastHit<220)return;let dx=s.x-u.x,dy=s.y-u.y,d=Math.hypot(dx,dy)||1,rr=s.r+u.r;if(d>rr)return;u.lastHit=now;let nx=dx/d,ny=dy/d,dot=s.vx*nx+s.vy*ny;s.vx=(s.vx-2*dot*nx)*.9+u.vx*.12;s.vy=(s.vy-2*dot*ny)*.9;let sep=rr+3;s.x=u.x+nx*sep;s.y=u.y+ny*sep;state.shake=Math.max(state.shake,11);state.flash=Math.max(state.flash,.09);burst(s.x,s.y,'#72ffeb',24,270);tone(155,.08,'square',.035);tone(310,.055,'triangle',.018,.025)}function updateUfos(dt){for(let u of state.ufos){u.x+=u.vx*dt;u.phase+=dt*4;u.y=u.baseY+Math.sin(u.phase)*8;if(state.shot?.alive)hitUfo(state.shot,u)}state.ufos=state.ufos.filter(u=>u.x>-110&&u.x<W+110)}"
+                  lines.insert(i,helpers)
+                  break
+          else: raise SystemExit('stepShotPhysics not found')
+
+          # update: countdown only while primary projectile is alive + animate/collide UFO
+          for i,line in enumerate(lines):
+              if line.startswith('function update(dt)'):
+                  line=line.replace("function update(dt){if(state.shot?.alive&&!state.specialSpawnDone", "function update(dt){if(state.shot?.alive&&state.ufoSpawnTimer>=0){state.ufoSpawnTimer-=dt;if(state.ufoSpawnTimer<=0){spawnUfo();state.ufoSpawnTimer=-1}}updateUfos(dt);if(state.shot?.alive&&!state.specialSpawnDone")
+                  lines[i]=line
+                  break
+          else: raise SystemExit('update not found')
+
+          # clear UFO at end of a turn
+          for i,line in enumerate(lines):
+              if line.startswith('function endTurn()'):
+                  line=line.replace('state.specials=[];state.specialSpawnTimer=-1;','state.specials=[];state.ufos=[];state.ufoSpawnTimer=-1;state.specialSpawnTimer=-1;')
+                  lines[i]=line
+                  break
+          else: raise SystemExit('endTurn not found')
+
+          # draw the saucer before regular nodes/specials
+          for i,line in enumerate(lines):
+              if line.startswith('function draw()'):
+                  anchor='for(let n of state.nodes)if(n.alive)drawNode(n);'
+                  ufo_draw="for(let u of state.ufos){ctx.save();ctx.translate(u.x,u.y);ctx.shadowColor='#72ffeb';ctx.shadowBlur=24;ctx.fillStyle='#102b34';ctx.strokeStyle='#baffff';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,3,u.r,u.r*.34,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#67f8ff';ctx.beginPath();ctx.arc(0,-5,u.r*.42,Math.PI,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#ffe35c';ctx.shadowColor='#ffe35c';ctx.shadowBlur=13;for(let k=-2;k<=2;k++){ctx.beginPath();ctx.arc(k*u.r*.28,7,2.5,0,Math.PI*2);ctx.fill()}ctx.restore()}"
+                  if anchor not in line: raise SystemExit('draw anchor missing')
+                  line=line.replace(anchor,ufo_draw+anchor)
+                  lines[i]=line
+                  break
+          else: raise SystemExit('draw not found')
+
+          p.write_text('\n'.join(lines)+'\n')
+          PY
+
+          # Syntax check the inline JS.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('neoncr/index.html').read_text()
+          m=re.search(r'<script>(.*?)</script>',s,re.S)
+          assert m, 'script not found'
+          Path('/tmp/neon.js').write_text(m.group(1))
+          PY
+          node --check /tmp/neon.js
+          grep -q 'v0.4.1' neoncr/index.html
+          grep -q 'function spawnUfo' neoncr/index.html
+          grep -q '¡DE UN TIRO!' neoncr/index.html
+          ! grep -q 'LEVEL CLEAR!' neoncr/index.html
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Add rare UFO obstacle and one-shot clear bonus"
+          git push
