@@ -46,30 +46,27 @@ jobs:
           p = Path('towerchain/game.js')
           s = p.read_text()
 
-          s = s.replace('levels:{},paused:false', 'levels:{},cardsPicked:0,paused:false')
+          if 'cardsPicked:0' not in s:
+              s = s.replace('levels:{},paused:false', 'levels:{},cardsPicked:0,paused:false')
           s = s.replace('state.towerLevel=Math.min(20,state.towerLevel+1);', 'state.cardsPicked++;state.towerLevel=Math.min(20,1+Math.floor(state.cardsPicked/5));')
 
-          s = re.sub(
-              r"function enemyDef\(w\)\{.*?\}function spawn\(\)\{.*?\}\}function shoot",
-              """function enemyDef(w){if(w<7)return{set:'enemies',row:0,hp:35,spd:168,size:62};if(w<14)return{set:'enemies',row:1,hp:70,spd:160,size:75};if(w<21)return{set:'enemies',row:2,hp:95,spd:184,size:78};if(w<28)return{set:'enemies',row:3,hp:125,spd:170,size:70};if(w<34)return{set:'enemies',row:4,hp:190,spd:148,size:82};if(w<40)return{set:'enemies',row:5,hp:260,spd:154,size:90};if(w<46)return{set:'enemies',row:6,hp:330,spd:146,size:82};if(w<51)return{set:'enemies',row:7,hp:430,spd:140,size:82};if(w<56)return{set:'late_enemies',row:3,hp:650,spd:134,size:105};if(w<60)return{set:'late_enemies',row:6,hp:900,spd:126,size:120};return{set:'late_enemies',row:7,hp:12500,spd:72,size:Math.min(H*.72,560),boss:true}}function spawn(){let d=enemyDef(state.wave);if(state.wave===60&&state.bossSpawned)return;if(d.boss)state.bossSpawned=true;let lane=Math.random()*2-1,spawnX=W+d.size*.75,startY=H*(.615+lane*.022),midY=H*(.635+lane*.135),endY=H*(.735+lane*.018);state.enemies.push({x:spawnX,y:startY,spawnX,startY,midY,endY,lane,hp:d.hp*(1+state.wave*.035),max:d.hp*(1+state.wave*.035),spd:d.spd*(1+state.wave*.004),size:d.size,set:d.set,row:d.row,frame:0,anim:0,boss:d.boss,burn:0,slow:0,attack:0,attackClock:0,dps:d.boss?7:.48+state.wave*.017})}function shoot""",
-              s,
-              count=1,
-              flags=re.S
-          )
+          start = s.index('function enemyDef(w){')
+          end = s.index('function shoot(t){')
+          replacement = """function enemyDef(w){if(w<7)return{set:'enemies',row:0,hp:35,spd:168,size:62};if(w<14)return{set:'enemies',row:1,hp:70,spd:160,size:75};if(w<21)return{set:'enemies',row:2,hp:95,spd:184,size:78};if(w<28)return{set:'enemies',row:3,hp:125,spd:170,size:70};if(w<34)return{set:'enemies',row:4,hp:190,spd:148,size:82};if(w<40)return{set:'enemies',row:5,hp:260,spd:154,size:90};if(w<46)return{set:'enemies',row:6,hp:330,spd:146,size:82};if(w<51)return{set:'enemies',row:7,hp:430,spd:140,size:82};if(w<56)return{set:'late_enemies',row:3,hp:650,spd:134,size:105};if(w<60)return{set:'late_enemies',row:6,hp:900,spd:126,size:120};return{set:'late_enemies',row:7,hp:12500,spd:72,size:Math.min(H*.72,560),boss:true}}function spawn(){let d=enemyDef(state.wave);if(state.wave===60&&state.bossSpawned)return;if(d.boss)state.bossSpawned=true;let lane=Math.random()*2-1,spawnX=W+d.size*.75,startY=H*(.615+lane*.022),midY=H*(.635+lane*.135),endY=H*(.735+lane*.018);state.enemies.push({x:spawnX,y:startY,spawnX,startY,midY,endY,lane,hp:d.hp*(1+state.wave*.035),max:d.hp*(1+state.wave*.035),spd:d.spd*(1+state.wave*.004),size:d.size,set:d.set,row:d.row,frame:0,anim:0,boss:d.boss,burn:0,slow:0,attack:0,attackClock:0,dps:d.boss?7:.48+state.wave*.017})}"""
+          s = s[:start] + replacement + s[end:]
 
           s = s.replace("let interval=Math.max(.34,.95-state.wave*.009);if(state.spawnClock>interval){state.spawnClock=0;spawn();if(state.wave>=8&&Math.random()<Math.min(.55,state.wave/100))spawn()}",
                         "let interval=Math.max(.24,.72-state.wave*.006);if(state.spawnClock>interval){state.spawnClock=0;spawn();if(state.wave>=6&&Math.random()<Math.min(.72,.18+state.wave*.009))spawn()}")
 
-          s = re.sub(
-              r"for\(const e of state\.enemies\)\{.*?\}for\(const s of state\.shots\)",
-              """const flowerX=W*.205,flowerY=H*.74;for(const e of state.enemies){e.anim+=dt;if(e.anim>.16){e.anim=0;if(!e.attack)e.frame=1-e.frame}if(e.burn>0){e.hp-=state.fire*dt;e.burn-=dt}if(!e.attack){let targetX=flowerX+(e.boss?e.size*.2:Math.max(32,e.size*.34)),den=Math.max(1,e.spawnX-targetX),progress=Math.max(0,Math.min(1,(e.spawnX-e.x)/den)),smooth=t=>t*t*(3-2*t);if(progress<.52){let q=smooth(progress/.52);e.y=e.startY+(e.midY-e.startY)*q}else{let q=smooth((progress-.52)/.48);e.y=e.midY+(e.endY-e.midY)*q}e.x-=e.spd*(1-(e.slow||0))*dt;if(e.x<=targetX){e.x=targetX;e.y=e.endY;e.attack=1;e.frame=2;e.anim=0}}else{e.frame=2;e.attackClock+=dt;e.y+=(e.endY-e.y)*Math.min(1,dt*5);state.hp-=e.dps*dt;if(state.hp<=0){state.hp=0;sync();return end(false)}}}for(const s of state.shots)""",
-              s,
-              count=1,
-              flags=re.S
-          )
+          if 'const flowerX=W*.205' not in s:
+              a = s.index('for(const e of state.enemies){')
+              b = s.index('for(const s of state.shots){')
+              enemy_loop = """const flowerX=W*.205,flowerY=H*.74;for(const e of state.enemies){e.anim+=dt;if(e.anim>.16){e.anim=0;if(!e.attack)e.frame=1-e.frame}if(e.burn>0){e.hp-=state.fire*dt;e.burn-=dt}if(!e.attack){let targetX=flowerX+(e.boss?e.size*.2:Math.max(32,e.size*.34)),den=Math.max(1,e.spawnX-targetX),progress=Math.max(0,Math.min(1,(e.spawnX-e.x)/den)),smooth=t=>t*t*(3-2*t);if(progress<.52){let q=smooth(progress/.52);e.y=e.startY+(e.midY-e.startY)*q}else{let q=smooth((progress-.52)/.48);e.y=e.midY+(e.endY-e.midY)*q}e.x-=e.spd*(1-(e.slow||0))*dt;if(e.x<=targetX){e.x=targetX;e.y=e.endY;e.attack=1;e.frame=2;e.anim=0}}else{e.frame=2;e.attackClock+=dt;e.y+=(e.endY-e.y)*Math.min(1,dt*5);state.hp-=e.dps*dt;if(state.hp<=0){state.hp=0;sync();return end(false)}}}"""
+              s = s[:a] + enemy_loop + s[b:]
 
-          s = s.replace("let ti=Math.max(0,Math.min(19,state.towerLevel-1));drawSprite('towers',Math.floor(ti/4),ti%4,W*.115,H*.70,Math.min(H*.38,280));",
-                        "let ti=Math.max(0,Math.min(19,state.towerLevel-1)),towerBase=Math.min(H*.30,230),towerScale=1+(state.towerLevel-1)*.065;drawSprite('towers',Math.floor(ti/4),ti%4,W*.115,H*.70,towerBase*towerScale);")
+          if 'towerScale=1+(state.towerLevel-1)*.065' not in s:
+              s = s.replace("let ti=Math.max(0,Math.min(19,state.towerLevel-1));drawSprite('towers',Math.floor(ti/4),ti%4,W*.115,H*.70,Math.min(H*.38,280));",
+                            "let ti=Math.max(0,Math.min(19,state.towerLevel-1)),towerBase=Math.min(H*.30,230),towerScale=1+(state.towerLevel-1)*.065;drawSprite('towers',Math.floor(ti/4),ti%4,W*.115,H*.70,towerBase*towerScale);")
 
           p.write_text(s)
 
