@@ -1,8 +1,9 @@
-import { AVATARS } from './game-data.js?v=0.8.3';
+import { AVATARS } from './game-data.js?v=0.8.4';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.8.3';
+const VERSION = '0.8.4';
+const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
 const MIN_PLAYERS = 2;
@@ -208,7 +209,30 @@ function handleEnvelope(peerId,data){
     case 'spy-vote': return onSpyVote(data.payload,cid);
     case 'spy-final': return onSpyFinal(data.payload);
     case 'spy-guess-location': return onSpyGuessLocation(data.payload,cid);
+    case 'superadmin-command': return onSuperadminCommand(data.payload,cid);
     case 'system': return addSystem(data.payload?.text||'');
+  }
+}
+
+function onSuperadminCommand(p,cid){
+  if(!p||p.proof!==SUPERADMIN_PROOF||p.targetId!==selfId)return;
+  if(p.command==='rename'){
+    const next=String(p.value||'').trim().slice(0,20); if(!next)return;
+    myName=next;
+    if($('playerName'))$('playerName').value=next;
+    const m=me();
+    if(m){m.realName=next;if(!state.started)m.publicName=next;}
+    renderAll();
+    sendIntro();
+    if(isAdmin)broadcastRoster();
+    toast('El superadmin cambió tu nombre.');
+    return;
+  }
+  if(p.command==='kick'){
+    try{transportRoom?.leave?.();}catch{}
+    joined=false;
+    sessionStorage.setItem('eltopo-superadmin-notice','El superadmin te sacó de la sala.');
+    location.reload();
   }
 }
 
@@ -817,3 +841,4 @@ $('closeGenericModal')?.addEventListener('click',closeGenericModal);
 $('genericModal')?.addEventListener('click',e=>{if(e.target.id==='genericModal')closeGenericModal();});
 document.addEventListener('click',e=>{ if(reactionTarget&&!e.target.closest('#reactionPicker')&&!e.target.closest('[data-react]'))closeReactionPicker(); });
 buildEmojiPicker(); renderComposerReply(); renderAll();
+const superadminNotice=sessionStorage.getItem('eltopo-superadmin-notice'); if(superadminNotice){sessionStorage.removeItem('eltopo-superadmin-notice'); if($('landingError'))$('landingError').textContent=superadminNotice;}
