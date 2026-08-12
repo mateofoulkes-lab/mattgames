@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.2';
+import { AVATARS } from './game-data.js?v=0.10.3';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.2';
+const VERSION = '0.10.3';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -117,7 +117,7 @@ let state = freshState();
 function freshState(){
   return {
     roomCode:'', adminId:null, mode:null, phase:'lobby', started:false,
-    members:{}, lobbyMessages:[], messages:[], trigger:'', guesses:{}, scores:null,
+    members:{}, lobbyMessages:[], messages:[], chatSeq:0, trigger:'', guesses:{}, scores:null,
     final:false, reveal:null, createdAt:now(), roomLocked:false, chatDisabled:false, pinnedMessageId:null, adminForcedSpyId:null, adminForcedTrigger:null, mixedPreviousTargets:{}, mixedVoting:{closing:false,deadline:0,reason:''}, incognitoVoting:{votes:{},closing:false,deadline:0,reason:''}, spyfall:{votes:{},result:null,voting:false,deadline:0,turnOrder:[],turnIndex:0}
   };
 }
@@ -221,6 +221,7 @@ function handleEnvelope(peerId,data){
     case 'lobby-chat': return onLobbyChat(data.payload,cid);
     case 'return-lobby': return onReturnLobby(data.payload);
     case 'chat': return onChat(data.payload,cid);
+    case 'chat-submit': return onChatSubmit(data.payload,cid);
     case 'reaction': return onReaction(data.payload,cid);
     case 'mode': return onMode(data.payload);
     case 'start-mixed': return onStartMixed(data.payload);
@@ -627,7 +628,7 @@ function makePersona(avatar){
 function startIncognito(ids){
   state.started=true; state.phase='persona-select'; state.mode='incognito'; state.final=false; state.trigger=''; state.scores=null; state.reveal=null; state.incognitoVoting={votes:{},closing:false,deadline:0,reason:''}; clearTimeout(incognitoFinalizeTimer); clearInterval(incognitoCountdownTicker); enterMessenger();
   // Incógnito must not retain lobby traces containing real names.
-  state.messages=[{id:uid(),system:true,text:'🕶️ Modo Incógnito activado. El historial del lobby fue eliminado para proteger las identidades.',ts:now()}];
+  state.chatSeq=0; state.messages=[{id:uid(),system:true,text:'🕶️ Modo Incógnito activado. El historial del lobby fue eliminado para proteger las identidades.',ts:now(),seq:0}];
   replyingTo=null;
   const pool=shuffle(AVATARS).slice(0,Math.min(AVATARS.length,ids.length*2));
   ids.forEach((id,i)=>{
@@ -910,7 +911,7 @@ function scheduleReturnToLobby(summary,delay=6500){
 function returnEveryoneToLobby(summary='Partida terminada.'){
   if(!isAdmin)return;
   clearTimeout(returnLobbyTimer);
-  state.started=false; state.phase='lobby'; state.final=false; state.trigger=''; state.messages=[];
+  state.started=false; state.phase='lobby'; state.final=false; state.trigger=''; state.messages=[]; state.chatSeq=0;
   state.guesses={}; state.scores=null; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.incognitoVoting={votes:{},closing:false,deadline:0,reason:''}; state.spyfall={votes:{},result:null,voting:false,deadline:0,turnOrder:[],turnIndex:0};
   delete state._spyId; delete state._spyLocation;
   for(const m of Object.values(state.members)){
@@ -975,13 +976,31 @@ function addSystem(text){
 }
 function onChat(msg,cid){
   if(!msg?.id||state.messages.some(m=>m.id===msg.id))return;
-  const sender=state.members[cid]; msg.senderId=cid; msg.senderName=msg.senderName||displayName(sender); state.messages.push(msg); state.messages.sort((a,b)=>a.ts-b.ts); renderMessages();
+  const canonicalIncognito=state.mode==='incognito'&&msg.canonical===true;
+  const senderId=canonicalIncognito?(msg.senderId||cid):cid;
+  const sender=state.members[senderId]; msg.senderId=senderId; msg.senderName=msg.senderName||displayName(sender); state.messages.push(msg);
+  if(state.mode==='incognito') state.messages.sort((a,b)=>Number(a.seq||0)-Number(b.seq||0)||Number(a.ts||0)-Number(b.ts||0));
+  else state.messages.sort((a,b)=>a.ts-b.ts);
+  renderMessages();
+}
+function onChatSubmit(msg,cid){
+  if(!isAdmin||state.mode!=='incognito'||!state.started||!msg?.id||!msg?.text)return;
+  const sender=state.members[cid]; if(!sender||sender.online===false||sender.spectator||sender.muted)return;
+  if(state.messages.some(m=>m.id===msg.id))return;
+  state.chatSeq=Number(state.chatSeq||0)+1;
+  const canonical={id:msg.id,senderId:cid,senderName:displayName(sender),text:String(msg.text||'').slice(0,1000),ts:now(),seq:state.chatSeq,canonical:true,replyTo:msg.replyTo||null,reactions:{}};
+  state.messages.push(canonical); renderMessages(); send('chat',canonical).catch(()=>{});
 }
 function sendChat(){
   if(state.chatDisabled||me()?.muted){toast('El chat está deshabilitado.');return;}
   const input=$('messageInput'); const text=input?.value.trim(); if(!text)return;
   input.value=''; const msg={id:uid(),senderId:selfId,senderName:displayName(me()),text:text.slice(0,1000),ts:now(),replyTo:replyingTo?{id:replyingTo.id,senderName:replyingTo.senderName,text:replyingTo.text.slice(0,120)}:null,reactions:{}};
-  state.messages.push(msg); replyingTo=null; renderComposerReply(); renderMessages(); send('chat',msg).catch(()=>toast('No se pudo enviar'));
+  replyingTo=null; renderComposerReply();
+  if(state.mode==='incognito'&&state.started){
+    if(isAdmin)onChatSubmit(msg,selfId); else send('chat-submit',msg,state.adminId).catch(()=>toast('No se pudo enviar'));
+    return;
+  }
+  state.messages.push(msg); renderMessages(); send('chat',msg).catch(()=>toast('No se pudo enviar'));
 }
 function setReply(msg){ replyingTo=msg; renderComposerReply(); $('messageInput')?.focus(); }
 function renderComposerReply(){
