@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.8.2';
+import { AVATARS } from './game-data.js?v=0.8.3';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.8.2';
+const VERSION = '0.8.3';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
 const MIN_PLAYERS = 2;
@@ -22,7 +22,7 @@ const MODES = {
 
 const TRIGGERS = [
   'Organizan un viaje juntos y hay que decidir destino, presupuesto y quién duerme con quién.',
-  'Alguien del grupo ganó una suma importante de dinero y propone gastarla entre todos. ¿En qué?',
+  '{player} ganó una suma importante de dinero y propone gastarla entre todos. ¿En qué?',
   'Les ofrecen participar en un reality. Solo pueden entrar tres personas del grupo. ¿Quiénes?',
   'Tienen que abrir un negocio juntos mañana. ¿Qué negocio sería y qué trabajo tendría cada uno?',
   'Apareció una foto comprometedora de una fiesta vieja. ¿Quién la subió y qué hacemos con ella?',
@@ -300,19 +300,24 @@ function derangement(ids){
   for(let tries=0;tries<100;tries++){ const s=shuffle(ids); if(s.every((x,i)=>x!==ids[i]))return s; }
   return [...ids.slice(1),ids[0]];
 }
+function personalizeMixedTrigger(template,identities){
+  const names=Object.values(identities||{}).map(x=>x?.name).filter(Boolean);
+  const chosen=names.length?pick(names):'Alguien del grupo';
+  return String(template||'').replaceAll('{player}',chosen);
+}
 function startMixed(ids){
   const assigned=derangement(ids);
   const identities=Object.fromEntries(ids.map(id=>[id,{
     name:state.members[id].realName,
     avatar:state.members[id].lobbyAvatar||state.members[id].avatar||null
   }]));
-  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.trigger=pick(TRIGGERS); state.messages=[]; replyingTo=null; lastMixedIntroTrigger=''; clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); enterMessenger();
+  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.trigger=personalizeMixedTrigger(pick(TRIGGERS),identities); state.messages=[]; replyingTo=null; lastMixedIntroTrigger=''; clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); enterMessenger();
   ids.forEach((actorId,i)=>{
     const targetId=assigned[i]; const target=identities[targetId];
     state.members[actorId].publicName=target.name;
     state.members[actorId].avatar=target.avatar;
     state.members[actorId].spectator=false;
-    const info={mode:'mixed',targetName:target.name,targetId,realName:state.members[actorId].realName};
+    const info={mode:'mixed',targetName:target.name,targetAvatar:target.avatar,targetId,realName:state.members[actorId].realName};
     if(actorId===selfId) privateInfo=info;
     else send('mixed-private',info,actorId).catch(()=>{});
   });
@@ -327,7 +332,8 @@ function onMixedPrivate(p){ privateInfo=p; maybeShowMixedIntro(); }
 function maybeShowMixedIntro(){
   if(state.mode!=='mixed'||!state.started||privateInfo?.mode!=='mixed'||!state.trigger||lastMixedIntroTrigger===state.trigger)return;
   lastMixedIntroTrigger=state.trigger;
-  showModal('Todo mezclado',`<div class="mixed-start-modal"><span class="mixed-start-kicker">VAS A INTERPRETAR A</span><h2>${esc(privateInfo.targetName||'—')}</h2><div class="mixed-trigger-card"><span>DISPARADOR DE CONVERSACIÓN</span><strong>${esc(state.trigger)}</strong></div><button id="mixedStartClose" class="primary-btn">Empezar a chatear</button></div>`,()=>{$('mixedStartClose')?.addEventListener('click',closeGenericModal);});
+  const targetVisual={avatar:privateInfo.targetAvatar,publicName:privateInfo.targetName,realName:privateInfo.targetName};
+  showModal('Todo mezclado',`<div class="mixed-start-modal"><span class="mixed-start-kicker">VAS A INTERPRETAR A</span><div class="profile-big">${avatarMarkup(targetVisual)}</div><h2>${esc(privateInfo.targetName||'—')}</h2><div class="mixed-trigger-card"><span>DISPARADOR DE CONVERSACIÓN</span><strong>${esc(state.trigger)}</strong></div><button id="mixedStartClose" class="primary-btn">Empezar a chatear</button></div>`,()=>{$('mixedStartClose')?.addEventListener('click',closeGenericModal);});
 }
 
 function mixedVoteWindowOpen(){
@@ -773,7 +779,8 @@ function showPrivateCard(){
     showModal('Tu perfil',`<div class="private-character"><div class="profile-big">${avatarMarkup(m)}</div><strong>${esc(m.realName)}</strong><span>Este es tu nombre real en el lobby.</span><button id="changeAvatarBtn" class="ghost-btn">Cambiar foto</button></div>`,modal=>{$('changeAvatarBtn').onclick=()=>{closeGenericModal();openAvatarPicker();};}); return;
   }
   if(state.mode==='mixed'){
-    showModal('Tu papel secreto',`<div class="private-character"><div class="secret-emoji">🔀</div><span>Vos sos realmente</span><strong>${esc(privateInfo?.realName||m.realName)}</strong><span>Durante esta partida tenés que interpretar a</span><h2>${esc(privateInfo?.targetName||displayName(m))}</h2><p>Escribí, opiná y reaccioná como pensás que lo haría esa persona. El resto intenta descubrir quién está detrás.</p></div>`); return;
+    const targetVisual={avatar:privateInfo?.targetAvatar||m.avatar,publicName:privateInfo?.targetName||displayName(m),realName:privateInfo?.targetName||displayName(m)};
+    showModal('Tu papel secreto',`<div class="private-character"><div class="secret-emoji">🔀</div><span>Vos sos realmente</span><strong>${esc(privateInfo?.realName||m.realName)}</strong><span>Durante esta partida tenés que interpretar a</span><div class="profile-big">${avatarMarkup(targetVisual)}</div><h2>${esc(privateInfo?.targetName||displayName(m))}</h2><p>Escribí, opiná y reaccioná como pensás que lo haría esa persona. El resto intenta descubrir quién está detrás.</p></div>`); return;
   }
   if(state.mode==='incognito'){
     const p=m.persona; if(!p){toast('Todavía estás eligiendo personaje.');return;}
