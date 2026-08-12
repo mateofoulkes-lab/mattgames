@@ -1,0 +1,1 @@
+{"id":"rabbit","displayName":"Conejo bazooka","frameSize":96,"pivot":[0.5,1.0],"animations":{"walk":{"sheet":"walk.png","count":8,"fps":8,"loop":true},"shoot":{"sheet":"shoot.png","count":6,"fps":10,"loop":true},"death":{"sheet":"death.png","count":7,"fps":9,"loop":false}}}
