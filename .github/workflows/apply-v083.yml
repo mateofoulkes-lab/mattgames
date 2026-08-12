@@ -1,0 +1,31 @@
+name: Apply El Topo v0.8.3
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-v083.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply v0.8.3 patch
+        run: python eltopo/tools/apply_v083.py
+      - name: Validate JavaScript syntax
+        run: |
+          node --check eltopo/social-game.js
+          node --check eltopo/mixed-avatar-sync.js
+      - name: Commit v0.8.3
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add eltopo/social-game.js eltopo/index.html eltopo/mixed-avatar-sync.js
+          git commit -m "Show mixed target photo and personalize trigger" || exit 0
+          git push
