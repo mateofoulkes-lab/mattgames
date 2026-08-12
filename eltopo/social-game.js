@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.8.1';
+import { AVATARS } from './game-data.js?v=0.8.2';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.8.1';
+const VERSION = '0.8.2';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
 const MIN_PLAYERS = 2;
@@ -87,6 +87,8 @@ let isAdmin = false;
 let joined = false;
 let connectTimer = null;
 let returnLobbyTimer = null;
+let mixedFinalizeTimer = null;
+let mixedCountdownTicker = null;
 let lastMixedIntroTrigger = '';
 let myName = '';
 let myAvatar = null;
@@ -102,7 +104,7 @@ function freshState(){
   return {
     roomCode:'', adminId:null, mode:null, phase:'lobby', started:false,
     members:{}, lobbyMessages:[], messages:[], trigger:'', guesses:{}, scores:null,
-    final:false, reveal:null, createdAt:now(), spyfall:{votes:{},result:null}
+    final:false, reveal:null, createdAt:now(), mixedVoting:{closing:false,deadline:0,reason:''}, spyfall:{votes:{},result:null}
   };
 }
 
@@ -196,6 +198,7 @@ function handleEnvelope(peerId,data){
     case 'start-mixed': return onStartMixed(data.payload);
     case 'mixed-private': return onMixedPrivate(data.payload);
     case 'guess': return onGuess(data.payload,cid);
+    case 'mixed-countdown': return onMixedCountdown(data.payload);
     case 'mixed-final': return onMixedFinal(data.payload);
     case 'persona-options': return onPersonaOptions(data.payload);
     case 'persona-choice': return onPersonaChoice(data.payload,cid);
@@ -303,7 +306,7 @@ function startMixed(ids){
     name:state.members[id].realName,
     avatar:state.members[id].lobbyAvatar||state.members[id].avatar||null
   }]));
-  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.trigger=pick(TRIGGERS); state.messages=[]; replyingTo=null; lastMixedIntroTrigger=''; enterMessenger();
+  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.trigger=pick(TRIGGERS); state.messages=[]; replyingTo=null; lastMixedIntroTrigger=''; clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); enterMessenger();
   ids.forEach((actorId,i)=>{
     const targetId=assigned[i]; const target=identities[targetId];
     state.members[actorId].publicName=target.name;
@@ -327,27 +330,75 @@ function maybeShowMixedIntro(){
   showModal('Todo mezclado',`<div class="mixed-start-modal"><span class="mixed-start-kicker">VAS A INTERPRETAR A</span><h2>${esc(privateInfo.targetName||'—')}</h2><div class="mixed-trigger-card"><span>DISPARADOR DE CONVERSACIÓN</span><strong>${esc(state.trigger)}</strong></div><button id="mixedStartClose" class="primary-btn">Empezar a chatear</button></div>`,()=>{$('mixedStartClose')?.addEventListener('click',closeGenericModal);});
 }
 
+function mixedVoteWindowOpen(){
+  return state.mode==='mixed'&&state.started&&!state.final&&(!state.mixedVoting?.closing||now()<Number(state.mixedVoting.deadline||0));
+}
+function mixedRequiredVotes(){ const n=players().length; return Math.max(0,n*(n-1)); }
+function mixedSubmittedVotes(){
+  let total=0;
+  for(const [voterId,ballot] of Object.entries(state.guesses||{})){
+    for(const targetId of Object.keys(ballot||{})) if(voterId!==targetId&&state.members[targetId]&&!state.members[targetId].spectator) total++;
+  }
+  return total;
+}
+function mixedTargetVoteCount(targetId){
+  return Object.entries(state.guesses||{}).reduce((n,[voterId,ballot])=>n+(voterId!==targetId&&ballot?.[targetId]?1:0),0);
+}
+function mixedVoteBreakdown(targetId){
+  const counts={};
+  for(const [voterId,ballot] of Object.entries(state.guesses||{})){
+    if(voterId===targetId)continue;
+    const name=ballot?.[targetId]; if(name)counts[name]=(counts[name]||0)+1;
+  }
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+}
+function maybeStartAutoMixedCountdown(){
+  if(!isAdmin||state.mode!=='mixed'||state.final||state.mixedVoting?.closing)return;
+  const required=mixedRequiredVotes();
+  if(required>0&&mixedSubmittedVotes()>=required) beginMixedCountdown('all');
+}
+function beginMixedCountdown(reason='admin'){
+  if(!isAdmin||state.mode!=='mixed'||state.final||state.mixedVoting?.closing)return;
+  const payload={closing:true,deadline:now()+10000,reason};
+  state.mixedVoting=payload;
+  send('mixed-countdown',payload).catch(()=>{});
+  onMixedCountdown(payload);
+  clearTimeout(mixedFinalizeTimer);
+  mixedFinalizeTimer=setTimeout(completeMixedFinal,10050);
+}
+function onMixedCountdown(p){
+  if(!p?.closing)return;
+  state.mixedVoting={closing:true,deadline:Number(p.deadline)||now()+10000,reason:p.reason==='all'?'all':'admin'};
+  clearInterval(mixedCountdownTicker);
+  mixedCountdownTicker=setInterval(()=>{
+    renderGameBar();
+    if(now()>=state.mixedVoting.deadline)clearInterval(mixedCountdownTicker);
+  },200);
+  renderGameBar();
+}
 function openGuess(targetId){
-  if(state.mode!=='mixed'||!state.started||state.final||targetId===selfId)return;
+  if(!mixedVoteWindowOpen()||targetId===selfId)return;
   const target=state.members[targetId]; if(!target||target.spectator)return;
   const myGuess=state.guesses?.[selfId]?.[targetId]||'';
   const realNames=players().map(m=>m.realName).sort((a,b)=>a.localeCompare(b));
-  showModal('¿Quién es en realidad?',`<div class="guess-target"><div class="profile-big">${avatarMarkup(target)}</div><strong>${esc(displayName(target))}</strong><span>Elegí quién pensás que está detrás de este usuario. Tu voto es público y podés cambiarlo.</span></div><div class="guess-list">${realNames.map(n=>`<button class="guess-option ${n===myGuess?'selected':''}" data-real="${esc(n)}">${esc(n)}</button>`).join('')}</div>`, modal=>{
+  showModal('¿Quién es en realidad?',`<div class="guess-target"><div class="profile-big">${avatarMarkup(target)}</div><strong>${esc(displayName(target))}</strong><span>Elegí quién pensás que está detrás de este usuario. Tu voto es privado y podés cambiarlo hasta que termine el contador.</span></div><div class="guess-list">${realNames.map(n=>`<button class="guess-option ${n===myGuess?'selected':''}" data-real="${esc(n)}">${esc(n)}</button>`).join('')}</div>`, modal=>{
     modal.querySelectorAll('.guess-option').forEach(b=>b.onclick=()=>castGuess(targetId,b.dataset.real));
   });
 }
 function castGuess(targetId,realName){
+  if(!mixedVoteWindowOpen())return;
   state.guesses[selfId] ||= {}; state.guesses[selfId][targetId]=realName;
-  send('guess',{targetId,realName}).catch(()=>{}); closeGenericModal(); renderAll();
+  send('guess',{targetId,realName}).catch(()=>{}); closeGenericModal(); renderAll(); maybeStartAutoMixedCountdown();
 }
 function onGuess(p,cid){
   if(state.mode!=='mixed'||state.final||!p?.targetId||!state.members[p.targetId])return;
-  state.guesses[cid] ||= {}; state.guesses[cid][p.targetId]=String(p.realName||''); renderAll();
+  state.guesses[cid] ||= {}; state.guesses[cid][p.targetId]=String(p.realName||''); renderAll(); maybeStartAutoMixedCountdown();
 }
-function finalizeMixed(){
+function finalizeMixed(){ beginMixedCountdown('admin'); }
+function completeMixedFinal(){
   if(!isAdmin||state.mode!=='mixed'||state.final)return;
-  state.final=true; const scores={};
-  players().forEach(m=>{scores[m.id]=0;});
+  clearInterval(mixedCountdownTicker); state.final=true; state.phase='finished';
+  const scores={}; players().forEach(m=>{scores[m.id]=0;});
   for(const [voterId,ballot] of Object.entries(state.guesses||{})){
     for(const [targetId,guessName] of Object.entries(ballot||{})){
       const target=state.members[targetId]; if(!target||target.spectator||voterId===targetId)continue;
@@ -358,12 +409,23 @@ function finalizeMixed(){
   const reveal=Object.fromEntries(players().map(m=>[m.id,{shown:displayName(m),real:m.realName}]));
   state.scores=scores; state.reveal=reveal;
   const payload={scores,reveal,guesses:state.guesses};
-  send('mixed-final',payload).catch(()=>{}); onMixedFinal(payload); addSystem('🏁 El administrador cerró la votación. Se revelaron las identidades.');
+  send('mixed-final',payload).catch(()=>{}); onMixedFinal(payload);
 }
-function onMixedFinal(p){ state.final=true; state.phase='finished'; state.scores=p.scores||{}; state.reveal=p.reveal||{}; if(p.guesses)state.guesses=p.guesses; renderAll(); showScoreboard(); if(isAdmin)scheduleReturnToLobby('Todo mezclado terminó.'); }
+function onMixedFinal(p){
+  clearInterval(mixedCountdownTicker); state.final=true; state.phase='finished'; state.scores=p.scores||{}; state.reveal=p.reveal||{}; if(p.guesses)state.guesses=p.guesses; renderAll(); showScoreboard();
+  if(isAdmin)scheduleReturnToLobby('Todo mezclado terminó.',14000);
+}
 function showScoreboard(){
-  const rows=players().sort((a,b)=>(state.scores?.[b.id]||0)-(state.scores?.[a.id]||0)).map(m=>`<div class="score-row"><div class="score-avatar">${avatarMarkup(m)}</div><div><strong>${esc(state.reveal?.[m.id]?.shown||displayName(m))}</strong><span>Era ${esc(state.reveal?.[m.id]?.real||m.realName)}</span></div><b>${state.scores?.[m.id]||0} pts</b></div>`).join('');
-  showModal('Resultado · Todo mezclado',`<div class="score-list">${rows}</div><p class="modal-note">+1 por cada identidad acertada. +1 por cada voto equivocado que lograste provocar sobre tu usuario.</p>`);
+  const ranking=[...players()].sort((a,b)=>(state.scores?.[b.id]||0)-(state.scores?.[a.id]||0));
+  const topScore=ranking.length?state.scores?.[ranking[0].id]||0:0;
+  const winners=ranking.filter(m=>(state.scores?.[m.id]||0)===topScore);
+  const winnerText=winners.length===1?`🏆 ${esc(winners[0].realName)} gana la ronda con ${topScore} puntos`:`🏆 Empate: ${winners.map(m=>esc(m.realName)).join(' · ')} con ${topScore} puntos`;
+  const rows=ranking.map((m,i)=>{
+    const breakdown=mixedVoteBreakdown(m.id); const total=breakdown.reduce((n,[,c])=>n+c,0);
+    const votes=breakdown.length?breakdown.map(([name,count])=>`<span class="result-vote-chip">${esc(name)} ×${count}</span>`).join(''):'<span class="result-no-votes">Sin votos</span>';
+    return `<div class="mixed-result-row ${i===0?'leader':''}"><div class="mixed-result-rank">${i===0?'👑':`#${i+1}`}</div><div class="score-avatar">${avatarMarkup(m)}</div><div class="mixed-result-copy"><strong>${esc(state.reveal?.[m.id]?.shown||displayName(m))}</strong><span class="mixed-result-reveal">En realidad era <b>${esc(state.reveal?.[m.id]?.real||m.realName)}</b></span><span class="mixed-result-vote-total">${total} voto${total===1?'':'s'} recibido${total===1?'':'s'}</span><div class="mixed-result-votes">${votes}</div></div><b class="mixed-result-points">${state.scores?.[m.id]||0}<small> pts</small></b></div>`;
+  }).join('');
+  showModal('🎉 Resultados · Todo mezclado',`<div class="mixed-results"><div class="mixed-winner-card"><span>✨ RONDA TERMINADA ✨</span><strong>${winnerText}</strong></div><div class="mixed-results-title">¿QUIÉN ERA QUIÉN?</div><div class="mixed-results-list">${rows}</div><p class="modal-note">+1 por cada identidad acertada. +1 por cada voto equivocado que lograste provocar sobre tu usuario.</p><div class="mixed-return-note">Volviendo al lobby en unos segundos…</div></div>`);
 }
 
 function makePersona(avatar){
@@ -496,16 +558,16 @@ function sendLobbyChat(){
   send('lobby-chat',msg).catch(()=>toast('No se pudo enviar el mensaje del lobby'));
 }
 
-function scheduleReturnToLobby(summary){
+function scheduleReturnToLobby(summary,delay=6500){
   if(!isAdmin)return;
   clearTimeout(returnLobbyTimer);
-  returnLobbyTimer=setTimeout(()=>returnEveryoneToLobby(summary),6500);
+  returnLobbyTimer=setTimeout(()=>returnEveryoneToLobby(summary),delay);
 }
 function returnEveryoneToLobby(summary='Partida terminada.'){
   if(!isAdmin)return;
   clearTimeout(returnLobbyTimer);
   state.started=false; state.phase='lobby'; state.final=false; state.trigger=''; state.messages=[];
-  state.guesses={}; state.scores=null; state.reveal=null; state.spyfall={votes:{},result:null};
+  state.guesses={}; state.scores=null; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.spyfall={votes:{},result:null};
   delete state._spyId; delete state._spyLocation;
   for(const m of Object.values(state.members)){
     m.publicName=m.realName;
@@ -516,14 +578,14 @@ function returnEveryoneToLobby(summary='Partida terminada.'){
   }
   state.lobbyMessages ||= [];
   state.lobbyMessages.push({id:uid(),system:true,text:`🏁 ${summary}`,ts:now()});
-  privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger=''; selectedMode=state.mode||selectedMode;
+  clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger=''; selectedMode=state.mode||selectedMode;
   const payload={state:snapshotForClient()};
   send('return-lobby',payload).catch(()=>{});
   onReturnLobby(payload);
 }
 function onReturnLobby(p){
   if(!p?.state)return;
-  state=p.state; selectedMode=state.mode||selectedMode; privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger='';
+  state=p.state; selectedMode=state.mode||selectedMode; clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger='';
   closeGenericModal(); $('characterSelectModal')?.classList.add('hidden');
   enterLobby(); renderAll();
 }
@@ -615,9 +677,9 @@ function renderMembers(){
   });
 }
 function renderPublicVoteSummary(targetId){
-  if(state.mode==='mixed'&&state.started){
-    const entries=Object.entries(state.guesses||{}).filter(([v])=>v!==targetId).map(([v,b])=>b?.[targetId]?[state.members[v]?.publicName||state.members[v]?.realName,b[targetId]]:null).filter(Boolean);
-    if(entries.length) return `<small class="public-votes">${entries.map(([v,g])=>`${esc(v)} → ${esc(g)}`).join(' · ')}</small>`;
+  if(state.mode==='mixed'&&state.started&&!state.final){
+    const count=mixedTargetVoteCount(targetId);
+    if(count) return `<small class="public-votes">🗳️ ${count} voto${count===1?'':'s'} emitido${count===1?'':'s'}</small>`;
   }
   if(state.mode==='spyfall'&&state.started){
     const names=Object.entries(state.spyfall?.votes||{}).filter(([,t])=>t===targetId).map(([v])=>state.members[v]?.publicName||state.members[v]?.realName).filter(Boolean);
@@ -646,8 +708,17 @@ function renderGameBar(){
   const b=$('gameBanner'); if(!b)return;
   if(!state.started){b.classList.add('hidden');return;} b.classList.remove('hidden');
   let html=`<div class="game-phase"><strong>${MODES[state.mode]?.emoji||'🎮'} ${esc(MODES[state.mode]?.name||'Juego')}</strong><span>${esc(state.trigger||phaseText())}</span></div><button id="myCharacterBtn" class="banner-btn subtle">Mi personaje</button>`;
-  if(state.mode==='mixed'&&!state.final) html+=`<div class="game-help">Tocá el nombre de otro usuario para votar quién creés que es. La votación es pública y se puede cambiar.</div>`;
-  if(state.mode==='mixed'&&isAdmin&&!state.final) html+=`<button id="finalMixedBtn" class="banner-btn">Votación final</button>`;
+  if(state.mode==='mixed'&&!state.final){
+    const submitted=mixedSubmittedVotes(),required=mixedRequiredVotes();
+    if(state.mixedVoting?.closing){
+      const left=Math.max(0,Math.ceil((Number(state.mixedVoting.deadline||0)-now())/1000));
+      const text=state.mixedVoting.reason==='all'?'Todos votaron. Tenés 10 segundos para cambiar tu voto.':'Ronda cerrada. Tenés 10 segundos para votar o cambiar tu voto.';
+      html+=`<div class="mixed-countdown"><span>${esc(text)}</span><strong>${left}</strong></div>`;
+    }else{
+      html+=`<div class="game-help">Los votos son privados. Tocá un usuario para elegir quién creés que es. ${submitted}/${required} votos emitidos.</div>`;
+      if(isAdmin)html+=`<button id="finalMixedBtn" class="banner-btn">Finalizar votación</button>`;
+    }
+  }
   if(state.mode==='mixed'&&state.final) html+=`<button id="showScoresBtn" class="banner-btn">Ver resultado</button>`;
   if(state.mode==='incognito'&&isAdmin&&!state.final&&state.phase==='playing') html+=`<button id="revealIncognitoBtn" class="banner-btn">Revelar identidades</button>`;
   if(state.mode==='incognito'&&state.final) html+=`<button id="showIncognitoBtn" class="banner-btn">Ver identidades</button>`;
