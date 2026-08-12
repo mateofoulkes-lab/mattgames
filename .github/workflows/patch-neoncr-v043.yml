@@ -1,0 +1,66 @@
+name: Patch NEON v0.4.3
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v043.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add cannon power feedback and onboarding
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+
+          s=s.replace('v0.4.2','v0.4.3')
+
+          # Track visual charging power while dragging.
+          if 'aimPower:0' not in s:
+              s=s.replace('aimVel:null,nodes:', 'aimVel:null,aimPower:0,nodes:', 1)
+
+          # Power follows mouse/touch distance from the cannon.
+          old="function updateAim(e){if(!state.aiming)return;let c=cannon(),dx=e.clientX-c.x,dy=e.clientY-c.y,mag=Math.hypot(dx,dy)||1,max=Math.max(900,W*.72)+state.up.power*95,force=clamp(mag*3.15,220,max);state.aim={x:e.clientX,y:e.clientY};state.aimVel={x:dx/mag*force,y:dy/mag*force}}"
+          new="function updateAim(e){if(!state.aiming)return;let c=cannon(),dx=e.clientX-c.x,dy=e.clientY-c.y,mag=Math.hypot(dx,dy)||1,max=Math.max(900,W*.72)+state.up.power*95,force=clamp(mag*3.15,220,max);state.aimPower=clamp(mag*3.15/max,0,1);state.aim={x:e.clientX,y:e.clientY};state.aimVel={x:dx/mag*force,y:dy/mag*force}}"
+          if old not in s:
+              raise SystemExit('updateAim anchor not found')
+          s=s.replace(old,new,1)
+
+          # Reset meter after releasing.
+          s=s.replace("state.aim=null;state.aimVel=null});", "state.aim=null;state.aimVel=null;state.aimPower=0});", 1)
+
+          # Replace cannon renderer with integrated power bar + overcharge vibration/red state.
+          pat=r"function roundRect\(x,y,w,h,r\)\{.*?\}function drawCannon\(\)\{.*?\}\nfunction draw\(\)"
+          m=re.search(pat,s,re.S)
+          if not m:
+              raise SystemExit('drawCannon block not found')
+          repl=r'''function roundRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,h,r):(ctx.rect(x,y,w,h))}function drawCannon(){let c=cannon(),ang=state.aimVel?Math.atan2(state.aimVel.y,state.aimVel.x):-.28,lv=state.cannonLevel,p=state.aiming?state.aimPower:0,hot=state.aiming&&p>=.82;if(hot){c.x+=rand(-1.7,1.7);c.y+=rand(-1.3,1.3)}let charge=p<.5?'#82ff71':p<.82?'#ffe35c':'#ff526e',accent=hot?'#ff526e':(lv>=2?'#ffe35c':'#67f8ff');ctx.save();ctx.translate(c.x,c.y);glowFill(hot?'#ff526e':'#fff',hot?42:28+lv*5);ctx.beginPath();ctx.arc(0,0,25+lv*2,0,Math.PI*2);ctx.fill();ctx.fillStyle=hot?'#4a050d':'#071018';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();ctx.restore();ctx.save();ctx.translate(c.x,c.y);ctx.rotate(ang);ctx.shadowColor=accent;ctx.shadowBlur=hot?45:28+lv*7;ctx.fillStyle=hot?'#ff526e':(lv>=2?'#101010':'#fff');let bw=65+lv*9,bh=28+lv*3.4;roundRect(-8,-bh/2,bw,bh,14+lv);ctx.fill();ctx.strokeStyle=hot?'#ffd3da':'#fff';ctx.lineWidth=lv>=2?4:2.5;ctx.stroke();if(lv>=1){ctx.strokeStyle=hot?'#fff':(lv>=3?'#aa7cff':'#ffe35c');ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(6,-17);ctx.lineTo(45+lv*4,-17);ctx.stroke();ctx.beginPath();ctx.moveTo(6,17);ctx.lineTo(45+lv*4,17);ctx.stroke()}if(state.aiming){let x0=4,y0=-4,w=Math.max(34,bw-20),h=8;ctx.shadowBlur=0;ctx.fillStyle='#020609cc';roundRect(x0,y0,w,h,4);ctx.fill();ctx.strokeStyle='#ffffff88';ctx.lineWidth=1;ctx.stroke();if(p>0){ctx.fillStyle=charge;ctx.shadowColor=charge;ctx.shadowBlur=12;roundRect(x0+1,y0+1,(w-2)*p,h-2,3);ctx.fill()}ctx.shadowBlur=0;ctx.fillStyle=hot?'#fff':'#071018';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(Math.round(p*100)+'%',x0+w/2,y0+h/2+.5)}ctx.restore();if(state.aiming&&state.aimVel&&state.up.aim>0)drawPreview(state.aimVel.x,state.aimVel.y)}
+function draw()'''
+          s=s[:m.start()]+repl+s[m.end():]
+
+          # Clearer first-time instruction.
+          s=s.replace("msg('DOS TIPOS. UN CAÑÓN. EMPEZÁ.',C.right,1700)", "msg('CLIC EN EL CAÑÓN · ARRASTRÁ PARA CARGAR Y APUNTAR · SOLTÁ PARA DISPARAR',C.right,4200)", 1)
+
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('neoncr/index.html').read_text()
+          js='\n'.join(re.findall(r'<script[^>]*>(.*?)</script>',s,re.S))
+          Path('/tmp/neon-v043.js').write_text(js)
+          subprocess.run(['node','--check','/tmp/neon-v043.js'],check=True)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Teach cannon drag controls and add power meter"
+          git push
