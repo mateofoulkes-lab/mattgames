@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.1';
+import { AVATARS } from './game-data.js?v=0.10.2';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.1';
+const VERSION = '0.10.2';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -99,6 +99,8 @@ let mixedFinalizeTimer = null;
 let mixedCountdownTicker = null;
 let spyFinalizeTimer = null;
 let spyCountdownTicker = null;
+let incognitoFinalizeTimer = null;
+let incognitoCountdownTicker = null;
 const peerLeaveTimers = new Map();
 let lastMixedIntroTrigger = '';
 let myName = '';
@@ -116,7 +118,7 @@ function freshState(){
   return {
     roomCode:'', adminId:null, mode:null, phase:'lobby', started:false,
     members:{}, lobbyMessages:[], messages:[], trigger:'', guesses:{}, scores:null,
-    final:false, reveal:null, createdAt:now(), roomLocked:false, chatDisabled:false, pinnedMessageId:null, adminForcedSpyId:null, adminForcedTrigger:null, mixedPreviousTargets:{}, mixedVoting:{closing:false,deadline:0,reason:''}, spyfall:{votes:{},result:null,voting:false,deadline:0,turnOrder:[],turnIndex:0}
+    final:false, reveal:null, createdAt:now(), roomLocked:false, chatDisabled:false, pinnedMessageId:null, adminForcedSpyId:null, adminForcedTrigger:null, mixedPreviousTargets:{}, mixedVoting:{closing:false,deadline:0,reason:''}, incognitoVoting:{votes:{},closing:false,deadline:0,reason:''}, spyfall:{votes:{},result:null,voting:false,deadline:0,turnOrder:[],turnIndex:0}
   };
 }
 
@@ -229,6 +231,9 @@ function handleEnvelope(peerId,data){
     case 'persona-options': return onPersonaOptions(data.payload);
     case 'persona-choice': return onPersonaChoice(data.payload,cid);
     case 'incognito-start': return onIncognitoStart(data.payload);
+    case 'incognito-guess': return onIncognitoGuess(data.payload,cid);
+    case 'incognito-countdown': return onIncognitoCountdown(data.payload);
+    case 'incognito-final': return onIncognitoFinal(data.payload);
     case 'spy-private': return onSpyPrivate(data.payload);
     case 'spy-start': return onSpyStart(data.payload);
     case 'spy-vote': return onSpyVote(data.payload,cid);
@@ -319,7 +324,7 @@ function roomSuperadminCommand(p){
     case 'restart': {const mode=state.mode;returnEveryoneToLobby('El superadmin reinició la partida.');setTimeout(()=>{state.mode=mode;selectedMode=mode;startGame();},900);break;}
     case 'set-mode': {const mode=String(p.value||'');if(!MODES[mode]||MODES[mode].disabled)return true;if(state.started){returnEveryoneToLobby('Cambio de modo por superadmin.');setTimeout(()=>setMode(mode),500);}else setMode(mode);break;}
     case 'start': startGame(); break;
-    case 'finish': if(state.mode==='mixed')completeMixedFinal();else if(state.mode==='incognito')revealIncognito();else if(state.mode==='spyfall')finalizeSpyfall(); break;
+    case 'finish': if(state.mode==='mixed')completeMixedFinal();else if(state.mode==='incognito')finalizeIncognito();else if(state.mode==='spyfall')finalizeSpyfall(); break;
     case 'timer': if(state.mode==='mixed'&&state.mixedVoting?.closing){state.mixedVoting.deadline=Math.max(now()+500,Number(state.mixedVoting.deadline||now())+Number(p.value||0));send('mixed-countdown',state.mixedVoting).catch(()=>{});onMixedCountdown(state.mixedVoting);} break;
     case 'system-message': state.started?addSystem(String(p.value||'').slice(0,500)):addLobbySystem(String(p.value||'').slice(0,500)); break;
     case 'chat-disable': state.chatDisabled=!!p.value; broadcastFullState(); break;
@@ -620,7 +625,7 @@ function makePersona(avatar){
   return makeIncognitoPersona(avatar);
 }
 function startIncognito(ids){
-  state.started=true; state.phase='persona-select'; state.mode='incognito'; state.final=false; state.trigger=''; state.scores=null; enterMessenger();
+  state.started=true; state.phase='persona-select'; state.mode='incognito'; state.final=false; state.trigger=''; state.scores=null; state.reveal=null; state.incognitoVoting={votes:{},closing:false,deadline:0,reason:''}; clearTimeout(incognitoFinalizeTimer); clearInterval(incognitoCountdownTicker); enterMessenger();
   // Incógnito must not retain lobby traces containing real names.
   state.messages=[{id:uid(),system:true,text:'🕶️ Modo Incógnito activado. El historial del lobby fue eliminado para proteger las identidades.',ts:now()}];
   replyingTo=null;
@@ -657,19 +662,95 @@ function onPersonaChoice(p,cid){
   if(players().every(m=>m.persona)){
     state.phase='playing'; state.trigger=state.adminForcedTrigger||pick(TRIGGERS); state.adminForcedTrigger=null;
     addSystem(`🕶️ Todos tienen identidad. Disparador: ${state.trigger}`);
+    addSystem('🗳️ Tocá a los demás personajes para votar quién creés que es cada uno. +1 punto por cada identidad acertada.');
     const payload={state:snapshotForClient()}; send('incognito-start',payload).catch(()=>{}); renderAll();
   }
 }
-function onIncognitoStart(p){ if(p?.state)state=p.state; if(state.started)enterMessenger(); renderAll(); if(state.final)showIncognitoReveal(); }
-function revealIncognito(){
+function onIncognitoStart(p){ if(p?.state)state=p.state; state.incognitoVoting ||= {votes:{},closing:false,deadline:0,reason:''}; if(state.started)enterMessenger(); renderAll(); if(state.final&&state.scores)showIncognitoResults(); }
+function incognitoVoteWindowOpen(){ return state.mode==='incognito'&&state.started&&state.phase==='playing'&&!state.final&&(!state.incognitoVoting?.closing||now()<Number(state.incognitoVoting.deadline||0)); }
+function incognitoRequiredVotes(){ const n=players().length; return Math.max(0,n*(n-1)); }
+function incognitoSubmittedVotes(){
+  let total=0;
+  for(const [voterId,ballot] of Object.entries(state.incognitoVoting?.votes||{})){
+    const voter=state.members[voterId]; if(!voter||voter.online===false||voter.spectator)continue;
+    for(const targetId of Object.keys(ballot||{})){
+      const target=state.members[targetId]; if(voterId!==targetId&&target&&target.online!==false&&!target.spectator)total++;
+    }
+  }
+  return total;
+}
+function incognitoTargetVoteCount(targetId){
+  return Object.entries(state.incognitoVoting?.votes||{}).reduce((n,[voterId,ballot])=>{
+    const voter=state.members[voterId],target=state.members[targetId];
+    return n+(voter&&voter.online!==false&&!voter.spectator&&target&&target.online!==false&&!target.spectator&&voterId!==targetId&&ballot?.[targetId]?1:0);
+  },0);
+}
+function openIncognitoGuess(targetId){
+  if(!incognitoVoteWindowOpen()||targetId===selfId)return;
+  const target=state.members[targetId]; if(!target||target.online===false||target.spectator)return;
+  const mine=state.incognitoVoting?.votes?.[selfId]?.[targetId]||'';
+  const names=players().filter(m=>m.id!==selfId).map(m=>m.realName).sort((a,b)=>a.localeCompare(b));
+  showModal('¿Quién está detrás?',`<div class="guess-target"><div class="profile-big">${avatarMarkup(target)}</div><strong>${esc(displayName(target))}</strong><span>Elegí quién creés que es realmente. Tu voto es privado y podés cambiarlo hasta que termine la cuenta regresiva.</span></div><div class="guess-list">${names.map(n=>`<button class="guess-option ${n===mine?'selected':''}" data-incog-real="${esc(n)}">${esc(n)}</button>`).join('')}</div>`,modal=>{
+    modal.querySelectorAll('[data-incog-real]').forEach(b=>b.onclick=()=>castIncognitoGuess(targetId,b.dataset.incogReal));
+  });
+}
+function castIncognitoGuess(targetId,realName){
+  if(me()?.voteBlocked){toast('El superadmin bloqueó tus votos.');return;}
+  if(!incognitoVoteWindowOpen())return;
+  state.incognitoVoting ||= {votes:{},closing:false,deadline:0,reason:''};
+  state.incognitoVoting.votes[selfId] ||= {}; state.incognitoVoting.votes[selfId][targetId]=realName;
+  if(isAdmin)onIncognitoGuess({targetId,realName},selfId); else send('incognito-guess',{targetId,realName},state.adminId).catch(()=>{});
+  closeGenericModal(); renderAll();
+}
+function onIncognitoGuess(p,cid){
+  if(!isAdmin||state.mode!=='incognito'||state.final||state.phase!=='playing'||!p?.targetId)return;
+  const voter=state.members[cid],target=state.members[p.targetId]; if(!voter||voter.online===false||voter.spectator||!target||target.online===false||target.spectator||cid===p.targetId)return;
+  state.incognitoVoting ||= {votes:{},closing:false,deadline:0,reason:''}; state.incognitoVoting.votes[cid] ||= {}; state.incognitoVoting.votes[cid][p.targetId]=String(p.realName||'');
+  broadcastFullState(); maybeStartAutoIncognitoCountdown();
+}
+function maybeStartAutoIncognitoCountdown(){
+  if(!isAdmin||state.mode!=='incognito'||state.final||state.phase!=='playing'||state.incognitoVoting?.closing)return;
+  const required=incognitoRequiredVotes(); if(required>0&&incognitoSubmittedVotes()>=required)beginIncognitoCountdown('all');
+}
+function beginIncognitoCountdown(reason='admin'){
+  if(!isAdmin||state.mode!=='incognito'||state.final||state.phase!=='playing'||state.incognitoVoting?.closing)return;
+  const payload={closing:true,deadline:now()+20000,reason}; state.incognitoVoting={...(state.incognitoVoting||{}),closing:true,deadline:payload.deadline,reason};
+  send('incognito-countdown',payload).catch(()=>{}); onIncognitoCountdown(payload);
+  clearTimeout(incognitoFinalizeTimer); incognitoFinalizeTimer=setTimeout(completeIncognitoFinal,20050);
+}
+function onIncognitoCountdown(p){
+  if(!p?.closing)return; state.incognitoVoting ||= {votes:{}}; state.incognitoVoting.closing=true; state.incognitoVoting.deadline=Number(p.deadline)||now()+20000; state.incognitoVoting.reason=p.reason==='all'?'all':'admin';
+  clearInterval(incognitoCountdownTicker); incognitoCountdownTicker=setInterval(()=>{renderGameBar();if(now()>=state.incognitoVoting.deadline)clearInterval(incognitoCountdownTicker);},200); renderGameBar();
+}
+function finalizeIncognito(){ beginIncognitoCountdown('admin'); }
+function completeIncognitoFinal(){
   if(!isAdmin||state.mode!=='incognito'||state.final)return;
-  state.final=true; state.phase='finished'; state.reveal=Object.fromEntries(players().map(m=>[m.id,{persona:displayName(m),real:m.realName}]));
-  const payload={state:snapshotForClient()}; send('incognito-start',payload).catch(()=>{}); showIncognitoReveal(); renderAll(); scheduleReturnToLobby('Incógnito terminó.');
+  clearTimeout(incognitoFinalizeTimer); clearInterval(incognitoCountdownTicker); state.final=true; state.phase='finished';
+  const scores={}; players().forEach(m=>scores[m.id]=0);
+  for(const [voterId,ballot] of Object.entries(state.incognitoVoting?.votes||{})){
+    const voter=state.members[voterId]; if(!voter||voter.online===false||voter.spectator)continue;
+    for(const [targetId,guess] of Object.entries(ballot||{})){
+      const target=state.members[targetId]; if(!target||target.online===false||target.spectator||voterId===targetId)continue;
+      if(guess===target.realName)scores[voterId]=(scores[voterId]||0)+1;
+    }
+  }
+  const reveal=Object.fromEntries(players().map(m=>[m.id,{persona:displayName(m),real:m.realName,avatar:m.avatar}])); state.scores=scores; state.reveal=reveal;
+  const payload={scores,reveal,votes:state.incognitoVoting.votes}; send('incognito-final',payload).catch(()=>{}); onIncognitoFinal(payload);
 }
-function showIncognitoReveal(){
-  const rows=players().map(m=>`<div class="score-row"><div class="score-avatar">${avatarMarkup(m)}</div><div><strong>${esc(displayName(m))}</strong><span>Era ${esc(m.realName)}</span></div></div>`).join('');
-  showModal('Se levantó el incógnito',`<div class="score-list">${rows}</div>`);
+function onIncognitoFinal(p){
+  clearTimeout(incognitoFinalizeTimer); clearInterval(incognitoCountdownTicker); state.final=true; state.phase='finished'; state.scores=p.scores||{}; state.reveal=p.reveal||{}; state.incognitoVoting ||= {}; if(p.votes)state.incognitoVoting.votes=p.votes; renderAll(); showIncognitoResults();
 }
+function showIncognitoResults(){
+  const ranking=[...players()].sort((a,b)=>(state.scores?.[b.id]||0)-(state.scores?.[a.id]||0)); const top=ranking.length?(state.scores?.[ranking[0].id]||0):0; const winners=ranking.filter(m=>(state.scores?.[m.id]||0)===top);
+  const winner=winners.length===1?`🏆 ${esc(winners[0].realName)} gana con ${top} acierto${top===1?'':'s'}`:`🏆 Empate: ${winners.map(m=>esc(m.realName)).join(' · ')} con ${top} acierto${top===1?'':'s'}`;
+  const rows=ranking.map((m,i)=>`<div class="mixed-result-row ${i===0?'leader':''}"><div class="mixed-result-rank">${i===0?'👑':`#${i+1}`}</div><div class="score-avatar">${avatarMarkup(m)}</div><div class="mixed-result-copy"><strong>${esc(state.reveal?.[m.id]?.persona||displayName(m))}</strong><span class="mixed-result-reveal">En realidad era <b>${esc(state.reveal?.[m.id]?.real||m.realName)}</b></span></div><b class="mixed-result-points">${state.scores?.[m.id]||0}<small> pts</small></b></div>`).join('');
+  const action=isAdmin?'<button id="incogReturnLobby" class="primary-btn">Cerrar resultados y volver al lobby</button>':'<button id="incogResultClose" class="primary-btn">Cerrar resultados</button>';
+  showModal('🎭 Resultados · Incógnito',`<div class="mixed-results"><div class="mixed-winner-card"><span>✨ IDENTIDADES REVELADAS ✨</span><strong>${winner}</strong></div><div class="mixed-results-title">¿QUIÉN ERA QUIÉN?</div><div class="mixed-results-list">${rows}</div><p class="modal-note">+1 punto por cada identidad real que adivinaste correctamente.</p>${action}</div>`,()=>{
+    $('incogResultClose')?.addEventListener('click',closeGenericModal); $('incogReturnLobby')?.addEventListener('click',()=>returnEveryoneToLobby('Incógnito terminó.'));
+  });
+}
+function revealIncognito(){ finalizeIncognito(); }
+function showIncognitoReveal(){ showIncognitoResults(); }
 
 function startSpyfall(ids){
   state.started=true; state.phase='playing'; state.mode='spyfall'; state.final=false;
@@ -830,7 +911,7 @@ function returnEveryoneToLobby(summary='Partida terminada.'){
   if(!isAdmin)return;
   clearTimeout(returnLobbyTimer);
   state.started=false; state.phase='lobby'; state.final=false; state.trigger=''; state.messages=[];
-  state.guesses={}; state.scores=null; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.spyfall={votes:{},result:null,voting:false,deadline:0,turnOrder:[],turnIndex:0};
+  state.guesses={}; state.scores=null; state.reveal=null; state.mixedVoting={closing:false,deadline:0,reason:''}; state.incognitoVoting={votes:{},closing:false,deadline:0,reason:''}; state.spyfall={votes:{},result:null,voting:false,deadline:0,turnOrder:[],turnIndex:0};
   delete state._spyId; delete state._spyLocation;
   for(const m of Object.values(state.members)){
     m.publicName=m.realName;
@@ -841,7 +922,7 @@ function returnEveryoneToLobby(summary='Partida terminada.'){
   }
   state.lobbyMessages ||= [];
   state.lobbyMessages.push({id:uid(),system:true,text:`🏁 ${summary}`,ts:now()});
-  clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker); privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger=''; selectedMode=state.mode||selectedMode;
+  clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker); clearTimeout(incognitoFinalizeTimer); clearInterval(incognitoCountdownTicker); privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger=''; selectedMode=state.mode||selectedMode;
   const payload={state:snapshotForClient()};
   send('return-lobby',payload).catch(()=>{});
   onReturnLobby(payload);
@@ -946,11 +1027,16 @@ function renderPublicVoteSummary(targetId){
     const count=mixedTargetVoteCount(targetId);
     if(count) return `<small class="public-votes">🗳️ ${count} voto${count===1?'':'s'} emitido${count===1?'':'s'}</small>`;
   }
+  if(state.mode==='incognito'&&state.started&&!state.final&&state.phase==='playing'){
+    const count=incognitoTargetVoteCount(targetId);
+    if(count)return `<small class="public-votes">🗳️ ${count} voto${count===1?'':'s'} emitido${count===1?'':'s'}</small>`;
+  }
   return '';
 }
 function onMemberClick(id){
   if(id===selfId){showPrivateCard();return;}
   if(state.mode==='mixed'&&state.started&&!state.final){openGuess(id);return;}
+  if(state.mode==='incognito'&&state.started&&!state.final&&state.phase==='playing'){openIncognitoGuess(id);return;}
   if(state.mode==='spyfall'&&state.started&&!state.final&&state.spyfall?.voting&&!privateInfo?.isSpy){castSpyVote(id);return;}
   showPublicProfile(id);
 }
@@ -981,8 +1067,18 @@ function renderGameBar(){
     }
   }
   if(state.mode==='mixed'&&state.final) html+=`<button id="showScoresBtn" class="banner-btn">Ver resultado</button>`;
-  if(state.mode==='incognito'&&isAdmin&&!state.final&&state.phase==='playing') html+=`<button id="revealIncognitoBtn" class="banner-btn">Revelar identidades</button>`;
-  if(state.mode==='incognito'&&state.final) html+=`<button id="showIncognitoBtn" class="banner-btn">Ver identidades</button>`;
+  if(state.mode==='incognito'&&!state.final&&state.phase==='playing'){
+    const submitted=incognitoSubmittedVotes(),required=incognitoRequiredVotes();
+    if(state.incognitoVoting?.closing){
+      const left=Math.max(0,Math.ceil((Number(state.incognitoVoting.deadline||0)-now())/1000));
+      const text=state.incognitoVoting.reason==='all'?'Todos votaron. Tenés 20 segundos para cambiar tu voto.':'Ronda cerrada. Tenés 20 segundos para votar o cambiar tu voto.';
+      html+=`<div class="mixed-countdown"><span>${esc(text)}</span><strong>${left}</strong></div>`;
+    }else{
+      html+=`<div class="game-help">Tocá a los demás personajes para adivinar quién es quién. Los votos son privados. ${submitted}/${required} votos emitidos.</div>`;
+      if(isAdmin)html+=`<button id="revealIncognitoBtn" class="banner-btn">Finalizar votación</button>`;
+    }
+  }
+  if(state.mode==='incognito'&&state.final) html+=`<button id="showIncognitoBtn" class="banner-btn">Ver resultados</button>`;
   if(state.mode==='spyfall'&&!state.final){
     const turnId=currentSpyTurnId(),turn=state.members[turnId];
     if(state.spyfall?.voting&&!privateInfo?.isSpy){
@@ -996,7 +1092,7 @@ function renderGameBar(){
   if(state.mode==='spyfall'&&privateInfo?.isSpy&&!state.final) html+=`<button id="spyGuessBtn" class="banner-btn">Adivinar lugar</button>`;
   if(state.mode==='spyfall'&&isAdmin&&!state.final&&!state.spyfall?.voting) html+=`<button id="finalSpyBtn" class="banner-btn">Votación final</button>`;
   b.innerHTML=html;
-  $('myCharacterBtn')?.addEventListener('click',showPrivateCard); $('finalMixedBtn')?.addEventListener('click',finalizeMixed); $('showScoresBtn')?.addEventListener('click',showScoreboard); $('revealIncognitoBtn')?.addEventListener('click',revealIncognito); $('showIncognitoBtn')?.addEventListener('click',showIncognitoReveal); $('spyGuessBtn')?.addEventListener('click',guessSpyLocation); $('askSpyQuestionBtn')?.addEventListener('click',openSpyQuestionPicker); $('finalSpyBtn')?.addEventListener('click',beginSpyFinalVoting);
+  $('myCharacterBtn')?.addEventListener('click',showPrivateCard); $('finalMixedBtn')?.addEventListener('click',finalizeMixed); $('showScoresBtn')?.addEventListener('click',showScoreboard); $('revealIncognitoBtn')?.addEventListener('click',finalizeIncognito); $('showIncognitoBtn')?.addEventListener('click',showIncognitoReveal); $('spyGuessBtn')?.addEventListener('click',guessSpyLocation); $('askSpyQuestionBtn')?.addEventListener('click',openSpyQuestionPicker); $('finalSpyBtn')?.addEventListener('click',beginSpyFinalVoting);
 }
 function phaseText(){ if(state.mode==='incognito'&&state.phase==='persona-select')return 'Todos están eligiendo su identidad…'; if(state.final)return 'Partida terminada'; return 'Conversación en curso'; }
 
