@@ -1,0 +1,83 @@
+name: Patch NEON v0.4.4
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v044.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch HUD and failed sector flow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          s=s.replace('v0.4.3','v0.4.4')
+
+          old='''<div class="hud"><div class="row top"><div class="chip brand">NEON</div><div class="chip">SCORE <b id="score">0</b></div><div id="creditChip" class="chip creditChip"><span class="coin">$</span><b id="credits" class="creditNum">0</b></div><div class="chip">SECTOR <b id="sector">1</b></div><div class="chip">TIROS <b id="shots">4</b></div><div class="chip">CADENA x<b id="chain">0</b></div><div class="chip" id="objChip">OBJ <b id="objective">0/0</b><span class="bar"><i id="objBar"></i></span></div></div><div class="bottom"><div class="tip">Arrastrá desde el cañón hacia donde querés disparar. <b>Tenés que limpiar TODOS los nodos para avanzar.</b></div><div class="version">v0.4.4</div></div></div>'''
+          new='''<div class="hud"><div class="hudTop"><div class="hudLeft"><div class="chip brand">NEON</div><div id="creditChip" class="chip creditChip"><span class="coin">$</span><b id="credits" class="creditNum">0</b></div></div><div class="sectorBlock"><span class="hudLabel">SECTOR</span><b id="sector">1</b></div><div class="shotsBlock"><span class="hudLabel">DISPAROS RESTANTES</span><div id="shotDots" class="shotDots"></div><b id="shots" class="shotsNumber">5</b></div><div id="objChip" class="objectiveBlock"><span class="hudLabel">NODOS</span><b id="objective">0/0</b><span class="bar"><i id="objBar"></i></span></div></div><span id="score" hidden>0</span><span id="chain" hidden>0</span><div class="bottom"><div class="tip">Arrastrá desde el cañón hacia donde querés disparar. <b>Limpiá TODOS los nodos para avanzar.</b></div><div class="version">v0.4.4</div></div></div>'''
+          if old not in s: raise SystemExit('HUD anchor not found')
+          s=s.replace(old,new,1)
+
+          css='''<style id="v044-hud">
+          .hud{padding:10px 12px}.hudTop{width:100%;display:grid;grid-template-columns:minmax(190px,1fr) auto minmax(240px,1fr) auto;gap:14px;align-items:start}.hudLeft{display:flex;gap:7px;align-items:center}.sectorBlock,.shotsBlock,.objectiveBlock{border:1px solid #67f8ff3d;background:#0009;backdrop-filter:blur(8px);border-radius:12px;min-height:57px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5px 11px;box-shadow:0 0 18px #67f8ff0c}.sectorBlock{min-width:88px}.hudLabel{font-size:8px;letter-spacing:.15em;color:#91b9c2;line-height:1;margin-bottom:4px}.sectorBlock #sector{font-size:28px;line-height:.9;color:#fff;text-shadow:0 0 14px #67f8ff}.shotsBlock{min-width:235px}.shotDots{display:flex;gap:6px;align-items:center;justify-content:center;min-height:19px;flex-wrap:nowrap}.shotDot{width:14px;height:14px;border-radius:50%;border:1.5px solid #dfffff;background:#071018;box-shadow:0 0 7px #67f8ff33}.shotDot.on{background:#efffff;box-shadow:0 0 8px #fff,0 0 15px #67f8ff;border-color:#fff}.shotsNumber{display:none}.objectiveBlock{min-width:116px}.objectiveBlock #objective{font-size:13px;color:#bff}.objectiveBlock .bar{width:84px;margin:5px 0 0}.legend{top:80px}.failFlash{color:#ff526e!important;text-shadow:0 0 20px #fff,0 0 50px #ff526e!important}
+          @media(max-width:760px){.hudTop{grid-template-columns:1fr auto;gap:7px}.hudLeft{grid-column:1/2}.sectorBlock{grid-column:2/3;grid-row:1}.shotsBlock{grid-column:1/3;grid-row:2;min-width:0}.objectiveBlock{display:none}.legend{top:125px}.shotDot{width:12px;height:12px}}
+          </style>'''
+          s=s.replace('</head>',css+'</head>',1)
+
+          # Legend minimized on first visit, but honor later manual choice.
+          oldleg="function renderLegend(){let collapsed=localStorage.getItem('neon_legend_collapsed')==='1';"
+          newleg="function renderLegend(){let saved=localStorage.getItem('neon_legend_collapsed'),collapsed=saved===null?true:saved==='1';"
+          if oldleg not in s: raise SystemExit('legend anchor not found')
+          s=s.replace(oldleg,newleg,1)
+
+          # UI reference for dots.
+          s=s.replace("shots:$('shots'),chain:$('chain')", "shots:$('shots'),shotDots:$('shotDots'),chain:$('chain')",1)
+
+          # Add fail state.
+          s=s.replace("clearCelebrating:false,cannonLevel:0", "clearCelebrating:false,failResetting:false,cannonLevel:0",1)
+          s=s.replace("state.clearCelebrating=false;state.noteStep=0", "state.clearCelebrating=false;state.failResetting=false;state.noteStep=0",1)
+
+          # Render shot dots in updateUI.
+          old_ui="ui.shots.textContent=state.shotsLeft;ui.chain.textContent=state.chain;"
+          new_ui="ui.shots.textContent=state.shotsLeft;if(ui.shotDots){let h='';for(let i=0;i<state.shotsMax;i++)h+=`<span class=\"shotDot ${i<state.shotsLeft?'on':''}\"></span>`;ui.shotDots.innerHTML=h}ui.chain.textContent=state.chain;"
+          if old_ui not in s: raise SystemExit('updateUI shots anchor not found')
+          s=s.replace(old_ui,new_ui,1)
+
+          # Failed sector gets its own message and automatic reset, never workshop.
+          old_end="if(state.shotsLeft<=0){openShop('retry');return}openShop('turn')}"
+          new_end="if(state.shotsLeft<=0){sectorFail();return}openShop('turn')}"
+          if old_end not in s: raise SystemExit('endTurn retry anchor not found')
+          s=s.replace(old_end,new_end,1)
+
+          anchor="function endTurn(){"
+          idx=s.find(anchor)
+          if idx<0: raise SystemExit('endTurn anchor missing')
+          failfn="function sectorFail(){if(state.failResetting||state.levelCleared)return;state.failResetting=true;state.shotActive=false;state.shot=null;state.specials=[];state.ufos=[];state.parts=[];state.waves=[];state.beams=[];state.sweeps=[];ui.shotControls.classList.remove('show');ui.combo.classList.remove('super');ui.combo.classList.add('show','failFlash');ui.combo.innerHTML='SECTOR FALLIDO<br><span style=\"font-size:.42em\">REINICIANDO…</span>';state.flash=.5;state.shake=22;tone(110,.22,'sawtooth',.045);tone(82,.28,'sawtooth',.035,.12);setTimeout(()=>{ui.combo.classList.remove('show','failFlash');spawnSector()},1700)}\n"
+          s=s[:idx]+failfn+s[idx:]
+
+          # Block aiming during failure reset.
+          s=s.replace("||state.clearCelebrating)return;", "||state.clearCelebrating||state.failResetting)return;",1)
+
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('neoncr/index.html').read_text()
+          js='\n'.join(re.findall(r'<script[^>]*>(.*?)</script>',s,re.S))
+          Path('/tmp/neon-v044.js').write_text(js)
+          subprocess.run(['node','--check','/tmp/neon-v044.js'],check=True)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Redesign HUD around sector and remaining shots"
+          git push
