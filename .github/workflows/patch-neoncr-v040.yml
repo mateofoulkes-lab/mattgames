@@ -1,0 +1,139 @@
+name: Patch NEON v0.4.0
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v040.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Expand late game
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          def rep(a,b):
+              global s
+              assert a in s, 'missing pattern: '+a[:90]
+              s=s.replace(a,b,1)
+
+          # CSS: level-clear coin, shot controls, specials feel distinct.
+          rep(".clearCoin{width:.72em;height:.72em;font-size:.5em;margin-right:.12em;vertical-align:.08em}",
+              ".clearCoin{display:inline-grid;place-items:center;width:.92em;height:.92em;font-size:.42em;line-height:1;margin-right:.14em;vertical-align:.12em;transform:translateY(-.04em)}")
+          rep("@media(max-width:470px){.top .chip:nth-child(2){display:none}}",
+              ".shotControls{position:fixed;right:16px;bottom:18px;z-index:14;display:none;gap:9px;pointer-events:auto}.shotControls.show{display:flex}.shotAction{border:1px solid #fff8b3;background:linear-gradient(180deg,#fff4a1,#ffb413);color:#241400;border-radius:999px;padding:11px 18px;font:1000 11px ui-monospace,monospace;letter-spacing:.1em;box-shadow:0 0 18px #ffd84a77;cursor:pointer}.shotAction.boom{background:linear-gradient(180deg,#ffc08a,#ff5b32);border-color:#ffd1ad;box-shadow:0 0 18px #ff693f77}.shotAction:disabled{opacity:.3;filter:grayscale(.5)}\n@media(max-width:470px){.top .chip:nth-child(2){display:none}.shotControls{right:8px;bottom:10px}.shotAction{padding:9px 13px;font-size:10px}}")
+
+          # HUD version + active controls DOM.
+          rep('<div class="version">v0.3.15</div>', '<div class="version">v0.4.0</div>')
+          rep('<div id="legend" class="legend"></div><div id="msg" class="msg"></div>', '<div id="legend" class="legend"></div><div id="shotControls" class="shotControls"><button id="nitroBtn" class="shotAction">⚡ NITRO</button><button id="boomBtn" class="shotAction boom">✹ DETONAR</button></div><div id="msg" class="msg"></div>')
+
+          # Colors / labels / new node families.
+          rep("const C={right:'#67f8ff',left:'#ff4fd8',split2:'#ffe35c',split4:'#82ff71',grow:'#aa7cff',radial:'#ff9a52',link:'#efffff',spawn:'#ffffff',armor2:'#58d5ff',armor3:'#ff7088'},L={right:'→',left:'←',split2:'◇',split4:'✣',grow:'◉',radial:'✺',link:'⌁',spawn:'+4',armor2:'Ⅱ',armor3:'Ⅲ'};",
+              "const C={right:'#67f8ff',left:'#ff4fd8',split2:'#ffe35c',split4:'#82ff71',grow:'#aa7cff',radial:'#ff9a52',link:'#efffff',spawn:'#ffffff',armor2:'#58d5ff',armor3:'#ff7088',beamH:'#ffd84a',beamV:'#72ffeb',armor4:'#ff9f43',armor5:'#ff3f63',mover:'#7dff9b'},L={right:'→',left:'←',split2:'◇',split4:'✣',grow:'◉',radial:'✺',link:'⌁',spawn:'+4',armor2:'Ⅱ',armor3:'Ⅲ',beamH:'━',beamV:'┃',armor4:'Ⅳ',armor5:'Ⅴ',mover:'↻'};")
+          rep("spawn:{name:'GENERADOR +4',desc:'Crea cuatro nodos nuevos.',unlock:15},armor3:{name:'BLINDADO III',desc:'Resiste 3 impactos. Las esquirlas también le quitan vida.',unlock:18}};",
+              "spawn:{name:'GENERADOR +4',desc:'Crea cuatro nodos nuevos.',unlock:15},armor3:{name:'BLINDADO III',desc:'Resiste 3 impactos. Las esquirlas también le quitan vida.',unlock:18},beamH:{name:'BARRIDO H',desc:'Lanza una barra horizontal que destruye a su paso.',unlock:22},beamV:{name:'BARRIDO V',desc:'Lanza una barra vertical que destruye a su paso.',unlock:24},armor4:{name:'BLINDADO IV',desc:'Resiste 4 impactos y exige más penetración.',unlock:26},mover:{name:'ÓRBITA MÓVIL',desc:'Se desplaza en un patrón circular.',unlock:28},armor5:{name:'BLINDADO V',desc:'Resiste 5 impactos. Blindaje extremo.',unlock:32}};")
+
+          # Meaningful new cannon eras.
+          rep("{name:'CAÑÓN MK-IV · VACÍO',cost:7000,minSector:18,power:1.36,size:1.5,bounces:3,void:true,desc:'Desbloquea PENETRACIÓN III.'}];",
+              "{name:'CAÑÓN MK-IV · VACÍO',cost:7000,minSector:18,power:1.36,size:1.5,bounces:3,void:true,desc:'Desbloquea PENETRACIÓN III.'},{name:'CAÑÓN MK-V · MISIL',cost:15500,minSector:26,power:1.68,size:1.9,bounces:4,missile:true,nitro:true,desc:'Proyectil misil. Desbloquea NITRO y PENETRACIÓN IV.'},{name:'CAÑÓN MK-VI · NOVA',cost:34000,minSector:34,power:2.02,size:2.35,bounces:5,missile:true,nitro:true,detonate:true,desc:'Misil NOVA. Detonación manual de 16 esquirlas.'}];")
+
+          # State additions.
+          rep("beams:[],trails:[],floaters:[]", "beams:[],sweeps:[],trails:[],floaters:[]")
+          rep("specialSpawnTimer:-1,specialSpawnDone:false,up:{power:0,size:0,bounce:0,penetration:0,shots:0,mult:0,nodeSize:0,nodeLife:0,coinNode:0,bombNode:0}",
+              "specialSpawnTimer:-1,specialSpawnDone:false,nitroUsed:false,boomUsed:false,up:{power:0,size:0,bounce:0,penetration:0,shots:0,triple:0,mortar:0,orbit:0,mult:0,nodeSize:0,nodeLife:0,coinNode:0,bombNode:0}")
+          rep("introDesc:$('introDesc')};", "introDesc:$('introDesc'),shotControls:$('shotControls'),nitroBtn:$('nitroBtn'),boomBtn:$('boomBtn')};")
+
+          # Late game scaling, generalized armor.
+          rep("function availableTypes(){return Object.keys(nodeInfo).filter(k=>state.sector>=nodeInfo[k].unlock)}function sectorCount(){let area=Math.min(1.2,W*H/850000);return clamp(Math.round((11+state.sector*1.45)*area),10,48)}",
+              "function availableTypes(){return Object.keys(nodeInfo).filter(k=>state.sector>=nodeInfo[k].unlock)}function lateScale(){return state.sector<=24?1:clamp(1-(state.sector-24)*.018,.62,1)}function sectorCount(){let area=Math.min(1.2,W*H/850000),late=state.sector>24?1+(1-lateScale())*1.4:1;return clamp(Math.round((11+state.sector*1.55)*area*late),10,96)}")
+          rep("function isArmored(type){return type==='armor2'||type==='armor3'}function armorPenetration(type){return type==='armor2'?1:2}",
+              "function isArmored(type){return /^armor[2-5]$/.test(type)}function armorPenetration(type){return Math.max(1,(+type.replace('armor','')||2)-1)}function armorHp(type){return isArmored(type)?(+type.replace('armor','')||2):1}")
+          rep("let hp=type==='armor2'?2:type==='armor3'?3:1,mul=type==='armor2'?1.5:type==='armor3'?1.9:1,scale=forcedScale||nodeSizeRoll();state.nodes.push({x,y,type,r:r*mul*scale,baseR:r*mul*scale,scaleMul:scale,alive:true,triggered:false,pulse:rand(0,6.28),vx:0,vy:0,hp,maxHp:hp,lastDirectHit:-9999,lastChainHit:-9999})",
+              "let hp=armorHp(type),am=isArmored(type)?1.18+hp*.22:1,scale=(forcedScale||nodeSizeRoll())*lateScale();state.nodes.push({x,y,type,r:r*am*scale,baseR:r*am*scale,scaleMul:scale,alive:true,triggered:false,pulse:rand(0,6.28),vx:0,vy:0,hp,maxHp:hp,lastDirectHit:-9999,lastChainHit:-9999,ox:x,oy:y,movePhase:rand(0,6.28)})")
+          rep(">42))return{x,y}", ">42*lateScale()))return{x,y}")
+
+          # Clear absolutely stops the current shot before celebration.
+          rep("function levelClear(){if(state.levelCleared||state.nodes.some(n=>n.alive))return;state.levelCleared=true;state.clearCelebrating=true;",
+              "function levelClear(){if(state.levelCleared||state.nodes.some(n=>n.alive))return;if(state.shot)killShot(state.shot);state.shot=null;state.shotActive=false;state.specials=[];state.specialSpawnTimer=-1;state.parts=[];state.waves=[];state.beams=[];state.sweeps=[];ui.shotControls.classList.remove('show');state.levelCleared=true;state.clearCelebrating=true;")
+
+          # Reaction sound mapping.
+          rep("armor2:'square',armor3:'sawtooth'", "armor2:'square',armor3:'sawtooth',armor4:'square',armor5:'sawtooth',beamH:'square',beamV:'square',mover:'triangle'")
+
+          # New sweep reactions.
+          rep("if(n.type==='spawn')spawnFour(n);if(!state.nodes.some(q=>q.alive))levelClear();updateUI()}",
+              "if(n.type==='spawn')spawnFour(n);if(n.type==='beamH')state.sweeps.push({axis:'h',pos:n.y,w:0,life:0,max:.42,color:C.beamH});if(n.type==='beamV')state.sweeps.push({axis:'v',pos:n.x,w:0,life:0,max:.42,color:C.beamV});if(!state.nodes.some(q=>q.alive))levelClear();updateUI()}")
+
+          # Cannon shot scales with late-game zoom and resets active buttons.
+          rep("r=(11+state.up.size*1.7)*cd.size;return{x:c.x+38,y:c.y-8", "r=(11+state.up.size*1.7)*cd.size*lateScale();return{x:c.x+38,y:c.y-8")
+          rep("function shoot(vx,vy){state.shot=makeShot(vx,vy);state.specials=[];", "function shoot(vx,vy){state.shot=makeShot(vx,vy);state.nitroUsed=false;state.boomUsed=false;state.specials=[];")
+          rep("state.shotActive=true;state.chain=0;", "state.shotActive=true;ui.shotControls.classList.toggle('show',!!(cannonDefs[state.cannonLevel].nitro||cannonDefs[state.cannonLevel].detonate));ui.nitroBtn.style.display=cannonDefs[state.cannonLevel].nitro?'inline-block':'none';ui.boomBtn.style.display=cannonDefs[state.cannonLevel].detonate?'inline-block':'none';ui.nitroBtn.disabled=false;ui.boomBtn.disabled=false;state.chain=0;")
+          rep("function killShot(s){if(!s.alive)return;s.alive=false;state.specials=[];", "function killShot(s){if(!s.alive)return;s.alive=false;ui.shotControls.classList.remove('show');state.specials=[];")
+
+          # Nitro/detonate controls + late upgrades functionality.
+          marker="function update(dt){"
+          insert="""function useNitro(){let s=state.shot,cd=cannonDefs[state.cannonLevel];if(!s?.alive||!cd.nitro||state.nitroUsed)return;state.nitroUsed=true;ui.nitroBtn.disabled=true;s.vx*=1.72;s.vy*=1.72;state.shake=Math.max(state.shake,12);state.flash=Math.max(state.flash,.16);burst(s.x,s.y,'#67f8ff',28,320);tone(105,.12,'sawtooth',.04);tone(420,.08,'square',.018,.04)}function useDetonate(){let s=state.shot,cd=cannonDefs[state.cannonLevel];if(!s?.alive||!cd.detonate||state.boomUsed)return;state.boomUsed=true;ui.boomBtn.disabled=true;for(let k=0;k<16;k++){let a=k*Math.PI/8;pulse(s.x,s.y,Math.cos(a)*270,Math.sin(a)*270,'#ff9a52',1,7)}burst(s.x,s.y,'#ff9a52',55,390);state.shake=Math.max(state.shake,18);state.flash=Math.max(state.flash,.32);tone(62,.18,'square',.05)}ui.nitroBtn.onclick=useNitro;ui.boomBtn.onclick=useDetonate;
+          """
+          assert marker in s
+          s=s.replace(marker,insert+marker,1)
+
+          # Update moving nodes + sweeps + orbitals + mortar behavior.
+          rep("for(let n of state.nodes){n.pulse+=dt*3;if(n.alive&&(Math.abs(n.vx)+Math.abs(n.vy)>.02)){",
+              "for(let n of state.nodes){n.pulse+=dt*3;if(n.alive&&n.type==='mover'){let t=performance.now()/1000+n.movePhase;n.x=n.ox+Math.cos(t*1.45)*28*lateScale();n.y=n.oy+Math.sin(t*1.9)*18*lateScale()}if(n.alive&&(Math.abs(n.vx)+Math.abs(n.vy)>.02)){" )
+          rep("for(let p of state.parts){p.life+=dt;if(p.kind==='spark'){",
+              "if(state.shot?.alive&&state.up.orbit){let cnt=state.up.orbit+1,rad=(30+state.up.orbit*7)*lateScale();for(let i=0;i<cnt;i++){let a=performance.now()/260+i*Math.PI*2/cnt,o={x:state.shot.x+Math.cos(a)*rad,y:state.shot.y+Math.sin(a)*rad,r:5+state.up.orbit};hitNodes(o,1)}}for(let p of state.parts){p.life+=dt;if(p.kind==='mortar'){p.vy+=360*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;hitNodes(p,2);if(p.y>H+50||p.x<-50||p.x>W+50)p.life=p.max}else if(p.kind==='spark'){")
+          rep("state.waves=state.waves.filter(w=>w.r<w.max||w.life<.3);for(let b of state.beams)b.life+=dt;",
+              "state.waves=state.waves.filter(w=>w.r<w.max||w.life<.3);for(let sw of state.sweeps){sw.life+=dt;sw.w=Math.min(34,sw.w+220*dt);for(let n of state.nodes){if(!n.alive)continue;let hit=sw.axis==='h'?Math.abs(n.y-sw.pos)<sw.w+n.r:Math.abs(n.x-sw.pos)<sw.w+n.r;if(hit){if(isArmored(n.type))damageArmorFromChain(n);else trigger(n,.9)}}}state.sweeps=state.sweeps.filter(sw=>sw.life<sw.max);for(let b of state.beams)b.life+=dt;")
+          rep("let active=state.shot?.alive||state.parts.some(p=>p.kind==='pulse')||state.waves.length||state.beams.length;",
+              "let active=state.shot?.alive||state.parts.some(p=>p.kind==='pulse'||p.kind==='mortar')||state.waves.length||state.sweeps.length||state.beams.length;")
+
+          # Mortar burst on first primary impact.
+          rep("if(cd.heavy)state.waves.push({x:s.x,y:s.y,r:s.r,prev:s.r,max:s.r*4.5,speed:235,life:0,color:'#ffe35c'})}",
+              "if(cd.heavy)state.waves.push({x:s.x,y:s.y,r:s.r,prev:s.r,max:s.r*4.5,speed:235,life:0,color:'#ffe35c'});if(state.up.mortar){let m=1+state.up.mortar;for(let i=0;i<m;i++){let spread=(i-(m-1)/2)*90;state.parts.push({kind:'mortar',x:s.x,y:s.y,vx:spread,vy:-330-rand(0,90),r:5+state.up.mortar,life:0,max:3.4,color:'#ffe35c'})}}}")
+
+          # Triple: side shards at launch approximating extra projectiles.
+          rep("muzzleBlast(vx,vy);state.shotActive=true;", "muzzleBlast(vx,vy);if(state.up.triple){let count=state.up.triple>=2?2:1;for(let j=1;j<=count;j++)for(let sg of[-1,1]){let a=sg*(.055*j),ca=Math.cos(a),sa=Math.sin(a),px=vx*ca-vy*sa,py=vx*sa+vy*ca;state.parts.push({kind:'mortar',x:cannon().x+38,y:cannon().y-8,vx:px*.78,vy:py*.78,r:Math.max(5,state.shot.r*.62),life:0,max:5,color:'#fff'})}}state.shotActive=true;")
+
+          # New shop icons/upgrades, penetration ceiling extends.
+          rep("bombNode:'<svg viewBox=\"0 0 40 40\"><circle cx=\"19\" cy=\"23\" r=\"10\"/><path d=\"M25 15l5-5M29 9l3 3M20 6v5M8 10l4 4M33 22h4\"/></svg>'};",
+              "bombNode:'<svg viewBox=\"0 0 40 40\"><circle cx=\"19\" cy=\"23\" r=\"10\"/><path d=\"M25 15l5-5M29 9l3 3M20 6v5M8 10l4 4M33 22h4\"/></svg>',triple:'<svg viewBox=\"0 0 40 40\"><circle cx=\"11\" cy=\"20\" r=\"4\"/><circle cx=\"20\" cy=\"12\" r=\"4\"/><circle cx=\"29\" cy=\"20\" r=\"4\"/></svg>',mortar:'<svg viewBox=\"0 0 40 40\"><path d=\"M7 29Q20 5 33 29\"/><circle cx=\"20\" cy=\"13\" r=\"4\"/></svg>',orbit:'<svg viewBox=\"0 0 40 40\"><circle cx=\"20\" cy=\"20\" r=\"5\"/><ellipse cx=\"20\" cy=\"20\" rx=\"15\" ry=\"9\"/><circle cx=\"34\" cy=\"20\" r=\"3\"/></svg>'};")
+          rep("{tab:'cannon',k:'shots',name:'DISPAROS',desc:'Un tiro extra por sector.',base:700,max:3,color:'#ff9a52',factor:2.15},",
+              "{tab:'cannon',k:'shots',name:'DISPAROS',desc:'Un tiro extra por sector.',base:700,max:5,color:'#ff9a52',factor:2.15},{tab:'cannon',k:'triple',name:'MULTIBOLA',desc:'Agrega proyectiles laterales.',base:2200,max:2,color:'#67f8ff',factor:2.5},{tab:'cannon',k:'mortar',name:'MORTERO',desc:'Impactar lanza bolas en parábola.',base:2600,max:3,color:'#ffe35c',factor:2.35},{tab:'cannon',k:'orbit',name:'ÓRBITA',desc:'Satélites giran alrededor del disparo.',base:3100,max:4,color:'#aa7cff',factor:2.25},")
+          rep("{tab:'cannon',k:'penetration',name:'PENETRACIÓN',desc:'Atraviesa blindados.',base:750,max:3,color:'#ff7088',factor:2.3}",
+              "{tab:'cannon',k:'penetration',name:'PENETRACIÓN',desc:'Atraviesa blindados.',base:750,max:5,color:'#ff7088',factor:2.3}")
+
+          # Better cannon thumbnails + missile shape for levels >=4.
+          rep("let accent=lv===0?'#67f8ff':lv===1?'#ff4fd8':lv===2?'#ffe35c':'#aa7cff',barrel=76+lv*7,thick=18+lv*3;",
+              "let accent=lv===0?'#67f8ff':lv===1?'#ff4fd8':lv===2?'#ffe35c':lv===3?'#aa7cff':lv===4?'#ff9a52':'#ff526e',barrel=76+lv*9,thick=18+lv*4;")
+
+          # Draw sweeps, stronger specials, missile projectile and orbitals.
+          rep("for(let b of state.beams){ctx.save();", "for(let sw of state.sweeps){ctx.save();let a=1-sw.life/sw.max;ctx.globalAlpha=.72*a;ctx.fillStyle=sw.color;ctx.shadowColor=sw.color;ctx.shadowBlur=38;ctx.fillRect(sw.axis==='h'?0:sw.pos-sw.w,sw.axis==='h'?sw.pos-sw.w:0,sw.axis==='h'?W:sw.w*2,sw.axis==='h'?sw.w*2:H);ctx.restore()}for(let b of state.beams){ctx.save();")
+          old="for(let q of state.specials){ctx.save();let col=q.type==='coin'?'#ffe35c':'#ff9a52';glowFill(col,30);ctx.beginPath();ctx.arc(q.x,q.y,q.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#171000';ctx.shadowBlur=0;ctx.font=`bold ${q.type==='coin'?22:24}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(q.type==='coin'?'$':'✹',q.x,q.y+1);ctx.restore()}"
+          new="for(let q of state.specials){ctx.save();let col=q.type==='coin'?'#ffe35c':'#ff5b32',pulseR=1+Math.sin(performance.now()/110)*.08;ctx.translate(q.x,q.y);ctx.rotate(q.type==='bomb'?performance.now()/650:0);ctx.strokeStyle='#fff';ctx.shadowColor=col;ctx.shadowBlur=36;ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,q.r*1.42*pulseR,0,Math.PI*2);ctx.stroke();glowFill(col,34);ctx.beginPath();ctx.arc(0,0,q.r*pulseR,0,Math.PI*2);ctx.fill();if(q.type==='bomb'){for(let k=0;k<8;k++){let a=k*Math.PI/4;ctx.beginPath();ctx.moveTo(Math.cos(a)*q.r*1.05,Math.sin(a)*q.r*1.05);ctx.lineTo(Math.cos(a)*q.r*1.5,Math.sin(a)*q.r*1.5);ctx.stroke()}}ctx.fillStyle=q.type==='coin'?'#3a2500':'#fff';ctx.shadowBlur=0;ctx.font=`bold ${q.type==='coin'?28:27}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(q.type==='coin'?'$':'✹',0,1);ctx.restore()}"
+          rep(old,new)
+          rep("state.specials.push({x:p.x,y:p.y,r:type==='bomb'?19:17,type,life:0})", "state.specials.push({x:p.x,y:p.y,r:type==='bomb'?29:25,type,life:0})")
+          oldshot="if(state.shot?.alive){let s=state.shot,lv=state.cannonLevel,heavy=cannonDefs[lv].heavy,voidy=cannonDefs[lv].void;ctx.save();glowFill(voidy?'#7f64ff':heavy?'#101010':'#fff',heavy?12:28);ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=heavy?28:12;ctx.lineWidth=heavy?4:1.5;ctx.stroke();ctx.restore()}"
+          newshot="if(state.shot?.alive){let s=state.shot,lv=state.cannonLevel,cd=cannonDefs[lv],heavy=cd.heavy,voidy=cd.void;ctx.save();ctx.translate(s.x,s.y);let ang=Math.atan2(s.vy,s.vx);ctx.rotate(ang);glowFill(voidy?'#7f64ff':heavy?'#101010':cd.missile?'#ff9a52':'#fff',heavy?12:30);if(cd.missile){roundRect(-s.r*1.25,-s.r*.62,s.r*2.5,s.r*1.24,s.r*.62);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(-s.r*1.15,-s.r*.5);ctx.lineTo(-s.r*1.7,-s.r);ctx.lineTo(-s.r*.7,-s.r*.45);ctx.fill();ctx.beginPath();ctx.moveTo(-s.r*1.15,s.r*.5);ctx.lineTo(-s.r*1.7,s.r);ctx.lineTo(-s.r*.7,s.r*.45);ctx.fill()}else{ctx.beginPath();ctx.arc(0,0,s.r,0,Math.PI*2);ctx.fill()}ctx.strokeStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=heavy?28:12;ctx.lineWidth=heavy?4:1.5;ctx.stroke();ctx.restore();if(state.up.orbit){let cnt=state.up.orbit+1,rad=(30+state.up.orbit*7)*lateScale();for(let i=0;i<cnt;i++){let a=performance.now()/260+i*Math.PI*2/cnt;ctx.save();glowFill('#aa7cff',18);ctx.beginPath();ctx.arc(s.x+Math.cos(a)*rad,s.y+Math.sin(a)*rad,5+state.up.orbit,0,Math.PI*2);ctx.fill();ctx.restore()}}}"
+          rep(oldshot,newshot)
+
+          # Make drawCannon larger/more dramatic at higher tiers.
+          rep("roundRect(-8,-14,65+lv*5,28,14);", "roundRect(-8,-(14+lv*1.7),65+lv*9,28+lv*3.4,14+lv);" )
+
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('neoncr/index.html').read_text()
+          js=s.split('<script>',1)[1].rsplit('</script>',1)[0]
+          Path('/tmp/neon.js').write_text(js)
+          PY
+          node --check /tmp/neon.js
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Open NEON late-game progression and fix level clear"
+          git push
