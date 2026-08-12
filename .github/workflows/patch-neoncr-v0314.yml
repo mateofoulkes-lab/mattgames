@@ -1,0 +1,54 @@
+name: Patch NEON v0.3.14
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v0314.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch workshop layout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+
+          s=s.replace(
+            ".creditChip{color:var(--y);border-color:rgba(255,227,92,.75);background:rgba(55,45,0,.56);min-width:118px;text-align:center;font-weight:1000;box-shadow:0 0 20px rgba(255,227,92,.16)}",
+            ".creditChip{color:var(--y);border-color:rgba(255,227,92,.75);background:rgba(55,45,0,.56);min-width:118px;text-align:center;font-weight:1000;box-shadow:0 0 20px rgba(255,227,92,.16);display:inline-flex;align-items:center;justify-content:center;gap:4px}.creditChip .coin{margin-right:0;flex:0 0 auto}.creditChip .creditNum{line-height:1;display:inline-flex;align-items:center}"
+          )
+
+          s=s.replace(
+            ".overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);padding:14px;z-index:20}.overlay.show{display:flex}.panel{width:min(860px,100%);max-height:92vh;overflow:auto;border:1px solid #67f8ff66;border-radius:18px;padding:18px;background:linear-gradient(#07101af7,#000);box-shadow:0 0 55px #67f8ff1f}",
+            ".overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);padding:14px;z-index:20}.overlay.show{display:flex}.panel{width:min(860px,100%);max-height:92vh;overflow:auto;border:1px solid #67f8ff66;border-radius:18px;padding:18px;background:linear-gradient(#07101af7,#000);box-shadow:0 0 55px #67f8ff1f}#shop .panel{height:min(738px,92vh);display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#07101af7 0%,#02070cf7 58%,#000 100%)}.shopTitleBar{margin:-18px -18px 12px;padding:11px 16px;min-height:48px;display:flex;align-items:center;justify-content:center;gap:9px;border-bottom:1px solid #67f8ff55;background:linear-gradient(90deg,#071923,#0b2933,#071923);box-shadow:0 6px 24px #0008,inset 0 -1px 0 #67f8ff22}.shopTitleBar h1{margin:0!important;font-size:19px!important;letter-spacing:.16em;color:#8ffaff!important;text-shadow:0 0 14px #67f8ff}.shopTitleIcon{width:28px;height:28px;border:1px solid #67f8ff88;border-radius:8px;display:grid;place-items:center;color:#67f8ff;background:#67f8ff10;box-shadow:0 0 13px #67f8ff33;font-size:16px}.shopTitleIcon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}"
+          )
+
+          s=s.replace(
+            ".foot{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px}",
+            ".foot{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:11px}"
+          )
+
+          old='<div id="shop" class="overlay"><div class="panel"><div id="shopWallet" class="shopWallet"><span class="coin walletCoin">$</span><b id="shopCredits" class="walletNumber">0</b></div><h1 id="shopTitle">TALLER</h1><p id="shopSub" class="sub"></p>'
+          new='<div id="shop" class="overlay"><div class="panel"><div class="shopTitleBar"><span class="shopTitleIcon"><svg viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.2 2.2-3-3z"/></svg></span><h1 id="shopTitle">TALLER</h1></div><div id="shopWallet" class="shopWallet"><span class="coin walletCoin">$</span><b id="shopCredits" class="walletNumber">0</b></div><p id="shopSub" class="sub"></p>'
+          if old not in s:
+            raise SystemExit('shop header pattern not found')
+          s=s.replace(old,new,1)
+
+          old="ui.shopTitle.textContent=mode==='success'?'SECTOR '+state.sector+' COMPLETADO':mode==='retry'?'RECALIBRACIÓN':'TALLER';"
+          if old not in s:
+            raise SystemExit('shop title logic pattern not found')
+          s=s.replace(old,"ui.shopTitle.textContent='TALLER';",1)
+
+          s=s.replace('<div class="version">v0.3.13</div>','<div class="version">v0.3.14</div>',1)
+          p.write_text(s)
+          PY
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Unify workshop layout and align currency HUD"
+          git push
