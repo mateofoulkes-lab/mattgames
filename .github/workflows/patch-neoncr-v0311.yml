@@ -1,0 +1,126 @@
+name: Patch NEON v0.3.11
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v0311.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch game
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+
+          # Version.
+          s=s.replace('v0.3.10','v0.3.11')
+
+          # Tabs and compact shop layout.
+          s=s.replace(".section{font-size:9px;letter-spacing:.16em;margin:10px 0 5px;color:#a9c9d0;text-align:center}", ".section{font-size:9px;letter-spacing:.16em;margin:8px 0 4px;color:#a9c9d0;text-align:center}.shopTabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0 7px}.shopTab{pointer-events:auto;border:1px solid #ffffff2e;background:#ffffff08;color:#8da8ae;border-radius:10px;padding:8px;font:inherit;font-size:10px;font-weight:1000;letter-spacing:.12em;cursor:pointer}.shopTab.active{color:#071018;background:linear-gradient(180deg,#fff5a9,#ffd84a);border-color:#fff2a0;box-shadow:0 0 18px #ffd84a55}.shopTab.nodes.active{background:linear-gradient(180deg,#bafffd,#67f8ff);border-color:#baffff;box-shadow:0 0 18px #67f8ff55}")
+          s=s.replace('min-height:88px','min-height:82px').replace('padding:7px 10px;min-height:82px','padding:6px 10px;min-height:82px')
+          s=s.replace('min-height:72px;padding:6px 9px','min-height:68px;padding:5px 9px')
+
+          old='<div id="shop" class="overlay"><div class="panel"><div id="shopWallet" class="shopWallet"><span class="coin walletCoin">$</span><b id="shopCredits" class="walletNumber">0</b></div><h1 id="shopTitle">TALLER</h1><p id="shopSub" class="sub"></p><div class="section">CAÑÓN</div><button id="cannonUpgrade" class="cannonUpgrade"></button><div class="section">MEJORAS</div><div id="upgradeGrid" class="grid"></div><div class="foot"><button id="continueBtn" class="btn playBtn">¡JUGAR!</button></div></div></div>'
+          new='<div id="shop" class="overlay"><div class="panel"><div id="shopWallet" class="shopWallet"><span class="coin walletCoin">$</span><b id="shopCredits" class="walletNumber">0</b></div><h1 id="shopTitle">TALLER</h1><p id="shopSub" class="sub"></p><div class="shopTabs"><button id="tabCannon" class="shopTab active">CAÑÓN</button><button id="tabNodes" class="shopTab nodes">NODOS</button></div><div id="cannonBlock"><div class="section">EVOLUCIÓN</div><button id="cannonUpgrade" class="cannonUpgrade"></button></div><div id="upgradeTitle" class="section">MEJORAS DE CAÑÓN</div><div id="upgradeGrid" class="grid"></div><div class="foot"><button id="continueBtn" class="btn playBtn">¡JUGAR!</button></div></div></div>'
+          assert old in s, 'shop html pattern missing'
+          s=s.replace(old,new)
+
+          # State: extra node systems and shop tab.
+          old="cannonLevel:0,up:{power:0,size:0,bounce:0,mult:0,penetration:0},pendingIntro:null"
+          new="cannonLevel:0,shopTab:'cannon',specials:[],up:{power:0,size:0,bounce:0,penetration:0,shots:0,mult:0,nodeSize:0,nodeLife:0,coinNode:0,bombNode:0},pendingIntro:null"
+          assert old in s, 'state pattern missing'
+          s=s.replace(old,new)
+
+          # UI references for tabs.
+          old="upGrid:$('upgradeGrid'),cannonUpgrade:$('cannonUpgrade'),intro:$('intro')"
+          new="upGrid:$('upgradeGrid'),cannonUpgrade:$('cannonUpgrade'),cannonBlock:$('cannonBlock'),upgradeTitle:$('upgradeTitle'),tabCannon:$('tabCannon'),tabNodes:$('tabNodes'),intro:$('intro')"
+          assert old in s
+          s=s.replace(old,new)
+
+          # Node size variation, applied at creation and remembered.
+          old="function isArmored(type){return type==='armor2'||type==='armor3'}function armorPenetration(type){return type==='armor2'?1:2}function addNode(x,y,type,r=12){let hp=type==='armor2'?2:type==='armor3'?3:1,mul=type==='armor2'?1.5:type==='armor3'?1.9:1;state.nodes.push({x,y,type,r:r*mul,baseR:r*mul,alive:true"
+          new="function isArmored(type){return type==='armor2'||type==='armor3'}function armorPenetration(type){return type==='armor2'?1:2}function nodeSizeRoll(){let lv=state.up.nodeSize||0;if(!lv)return 1;let huge=.01+lv*.02,big=.07+lv*.075,q=Math.random();return q<huge?2:q<huge+big?1.5:1}function addNode(x,y,type,r=12,forcedScale=null){let hp=type==='armor2'?2:type==='armor3'?3:1,mul=type==='armor2'?1.5:type==='armor3'?1.9:1,scale=forcedScale||nodeSizeRoll();state.nodes.push({x,y,type,r:r*mul*scale,baseR:r*mul*scale,scaleMul:scale,alive:true"
+          assert old in s, 'addNode pattern missing'
+          s=s.replace(old,new)
+
+          # Pulse lifetime responds to node upgrade.
+          old="function pulse(x,y,vx,vy,c,p=1,r=5){state.parts.push({kind:'pulse',x,y,vx:vx*p,vy:vy*p,r,life:0,max:3.2,color:c})}"
+          new="function pulse(x,y,vx,vy,c,p=1,r=5){state.parts.push({kind:'pulse',x,y,vx:vx*p,vy:vy*p,r,life:0,max:3.2*(1+state.up.nodeLife*.28),color:c})}"
+          assert old in s
+          s=s.replace(old,new)
+
+          # Clear specials each sector and add extra cannon shots.
+          s=s.replace("state.nodes=[];state.parts=[];state.waves=[];state.beams=[];state.trails=[];", "state.nodes=[];state.parts=[];state.waves=[];state.beams=[];state.trails=[];state.specials=[];")
+          old="state.shotsMax=state.sector<7?4:state.sector<14?5:6;state.shotsLeft=state.shotsMax;renderLegend();updateUI();msg('SECTOR '"
+          new="state.shotsMax=(state.sector<7?4:state.sector<14?5:6)+state.up.shots;state.shotsLeft=state.shotsMax;spawnSectorSpecials();renderLegend();updateUI();msg('SECTOR '"
+          assert old in s
+          s=s.replace(old,new)
+
+          # Special clickable node helpers.
+          anchor="function spawnFour(source){"
+          special="""function specialSpot(){let pos=freeSpot();return{x:pos.x,y:pos.y}}function addSpecial(type){let p=specialSpot();state.specials.push({x:p.x,y:p.y,r:type==='bomb'?19:17,type,life:0})}function spawnSectorSpecials(){let coinChance=state.up.coinNode*.18,bombChance=state.up.bombNode*.14;if(Math.random()<coinChance)addSpecial('coin');if(Math.random()<bombChance)addSpecial('bomb');if(state.up.coinNode>=3&&Math.random()<coinChance*.35)addSpecial('coin')}function clickSpecial(x,y){for(let i=state.specials.length-1;i>=0;i--){let q=state.specials[i];if(Math.hypot(x-q.x,y-q.y)<=q.r+14){state.specials.splice(i,1);if(q.type==='coin'){let prize=65+state.sector*12+state.up.mult*18;addCredits(prize,q.x,q.y);burst(q.x,q.y,'#ffe35c',30,250);floater(q.x,q.y,'+$'+prize,'#ffe35c');tone(880,.08,'sine',.03);tone(1320,.08,'sine',.018,.04)}else{for(let k=0;k<16;k++){let a=k*Math.PI/8;pulse(q.x,q.y,Math.cos(a)*225,Math.sin(a)*225,'#ff9a52',1,7)}burst(q.x,q.y,'#ff9a52',46,330);state.shake=Math.max(state.shake,14);state.flash=Math.max(state.flash,.24);tone(70,.13,'square',.045);tone(210,.09,'sawtooth',.022,.04)}return true}}return false}\n"""
+          assert anchor in s
+          s=s.replace(anchor,special+anchor,1)
+
+          # Make emitted pulses scale with their parent node.
+          old="let v=210+state.up.power*16;if(n.type==='right')pulse(n.x,n.y,v,0,C.right,power);if(n.type==='left')pulse(n.x,n.y,-v,0,C.left,power);if(n.type==='split2')for(let a of[-.55,.55])pulse(n.x,n.y,Math.cos(a)*195,Math.sin(a)*195,C.split2,power);if(n.type==='split4')for(let i=0;i<4;i++){let a=i*Math.PI/2;pulse(n.x,n.y,Math.cos(a)*190,Math.sin(a)*190,C.split4,power)}"
+          new="let v=210+state.up.power*16,ns=n.scaleMul||1;if(n.type==='right')pulse(n.x,n.y,v,0,C.right,power,5*ns);if(n.type==='left')pulse(n.x,n.y,-v,0,C.left,power,5*ns);if(n.type==='split2')for(let a of[-.55,.55])pulse(n.x,n.y,Math.cos(a)*195,Math.sin(a)*195,C.split2,power,5*ns);if(n.type==='split4')for(let i=0;i<4;i++){let a=i*Math.PI/2;pulse(n.x,n.y,Math.cos(a)*190,Math.sin(a)*190,C.split4,power,5*ns)}"
+          assert old in s
+          s=s.replace(old,new)
+          s=s.replace("pulse(n.x,n.y,Math.cos(a)*180,Math.sin(a)*180,C.radial,power,.95)","pulse(n.x,n.y,Math.cos(a)*180,Math.sin(a)*180,C.radial,power,4.75*(n.scaleMul||1))")
+
+          # Bigger symbols inside nodes.
+          old="ctx.font=`bold ${Math.max(10,n.r*.72)}px monospace`"
+          new="ctx.font=`bold ${Math.max(18,n.r*1.35)}px monospace`"
+          assert old in s
+          s=s.replace(old,new)
+
+          # New upgrade definitions and icons.
+          old="const adjustments=[{k:'power',name:'IMPULSO',desc:'Más fuerza de disparo.',base:90,max:5,color:'#67f8ff'},{k:'size',name:'CALIBRE',desc:'Bala más grande.',base:120,max:4,color:'#aa7cff'},{k:'bounce',name:'REBOTE',desc:'Suma un rebote.',base:180,max:3,color:'#82ff71'},{k:'penetration',name:'PENETRACIÓN',desc:'Atraviesa blindados.',base:650,max:3,color:'#ff7088',factor:2.25},{k:'mult',name:'GANANCIA',desc:'Ganás más monedas.',base:260,max:4,color:'#ffe35c'}];"
+          new="const adjustments=[{tab:'cannon',k:'power',name:'IMPULSO',desc:'Más fuerza de disparo.',base:120,max:5,color:'#67f8ff'},{tab:'cannon',k:'size',name:'CALIBRE',desc:'Bala del cañón más grande.',base:160,max:4,color:'#aa7cff'},{tab:'cannon',k:'bounce',name:'REBOTE',desc:'Suma un rebote.',base:230,max:3,color:'#82ff71'},{tab:'cannon',k:'penetration',name:'PENETRACIÓN',desc:'Atraviesa blindados.',base:750,max:3,color:'#ff7088',factor:2.3},{tab:'cannon',k:'shots',name:'DISPAROS',desc:'Un tiro extra por sector.',base:700,max:3,color:'#ff9a52',factor:2.15},{tab:'nodes',k:'mult',name:'GANANCIA',desc:'Más monedas por reacción.',base:300,max:4,color:'#ffe35c'},{tab:'nodes',k:'nodeSize',name:'MUTACIÓN',desc:'Chance de nodos x1.5 / x2.',base:420,max:4,color:'#aa7cff'},{tab:'nodes',k:'nodeLife',name:'LONGEVIDAD',desc:'Esquirlas duran más.',base:380,max:4,color:'#67f8ff'},{tab:'nodes',k:'coinNode',name:'BOTÍN',desc:'Puede aparecer nodo $ clickeable.',base:520,max:4,color:'#ffe35c'},{tab:'nodes',k:'bombNode',name:'BOMBA',desc:'Puede aparecer bomba de 16 esquirlas.',base:680,max:4,color:'#ff9a52'}];"
+          assert old in s, 'adjustments pattern missing'
+          s=s.replace(old,new)
+          old="mult:'<svg viewBox=\"0 0 40 40\"><path d=\"M8 8l24 24M32 8L8 32\"/><circle cx=\"20\" cy=\"20\" r=\"15\"/></svg>'"
+          new="mult:'<svg viewBox=\"0 0 40 40\"><circle cx=\"20\" cy=\"20\" r=\"15\"/><path d=\"M24 12c-7-3-12 1-8 5 3 3 11 1 11 6 0 5-8 7-14 3M20 8v24\"/></svg>',shots:'<svg viewBox=\"0 0 40 40\"><circle cx=\"12\" cy=\"20\" r=\"5\"/><circle cx=\"25\" cy=\"12\" r=\"5\"/><circle cx=\"27\" cy=\"27\" r=\"5\"/></svg>',nodeSize:'<svg viewBox=\"0 0 40 40\"><circle cx=\"14\" cy=\"23\" r=\"6\"/><circle cx=\"27\" cy=\"17\" r=\"10\"/></svg>',nodeLife:'<svg viewBox=\"0 0 40 40\"><circle cx=\"20\" cy=\"20\" r=\"14\"/><path d=\"M20 12v9l7 4\"/></svg>',coinNode:'<svg viewBox=\"0 0 40 40\"><circle cx=\"20\" cy=\"20\" r=\"14\"/><path d=\"M24 13c-7-3-12 1-8 5 3 3 10 1 10 6 0 5-7 6-12 3M20 9v22\"/></svg>',bombNode:'<svg viewBox=\"0 0 40 40\"><circle cx=\"19\" cy=\"23\" r=\"10\"/><path d=\"M25 15l5-5M29 9l3 3M20 6v5M8 10l4 4M33 22h4\"/></svg>'"
+          assert old in s, 'icons pattern missing'
+          s=s.replace(old,new)
+
+          # Render tabs and filter upgrades.
+          marker="function renderShop(){ui.shopCredits.textContent=state.credits;"
+          repl="function renderShop(){ui.shopCredits.textContent=state.credits;ui.tabCannon.classList.toggle('active',state.shopTab==='cannon');ui.tabNodes.classList.toggle('active',state.shopTab==='nodes');ui.cannonBlock.style.display=state.shopTab==='cannon'?'block':'none';ui.upgradeTitle.textContent=state.shopTab==='cannon'?'MEJORAS DE CAÑÓN':'MEJORAS DE NODOS';"
+          assert marker in s
+          s=s.replace(marker,repl,1)
+          s=s.replace("for(let u of adjustments){let lv=state.up[u.k]", "for(let u of adjustments.filter(x=>x.tab===state.shopTab)){let lv=state.up[u.k]")
+          tabjs="ui.tabCannon.onclick=()=>{state.shopTab='cannon';renderShop()};ui.tabNodes.onclick=()=>{state.shopTab='nodes';renderShop()};\n"
+          s=s.replace("function upgradeCannon(next){",tabjs+"function upgradeCannon(next){",1)
+
+          # Specials are clickable before aiming.
+          old="canvas.addEventListener('pointerdown',e=>{if(ui.shop.classList.contains('show')||ui.intro.classList.contains('show')||state.shotActive||state.clearCelebrating)return;try{"
+          new="canvas.addEventListener('pointerdown',e=>{if(ui.shop.classList.contains('show')||ui.intro.classList.contains('show')||state.shotActive||state.clearCelebrating)return;if(clickSpecial(e.clientX,e.clientY))return;try{"
+          assert old in s
+          s=s.replace(old,new)
+
+          # Draw clickable specials.
+          anchor="for(let n of state.nodes)if(n.alive)drawNode(n);"
+          drawspecial="""for(let q of state.specials){ctx.save();let col=q.type==='coin'?'#ffe35c':'#ff9a52';glowFill(col,30);ctx.beginPath();ctx.arc(q.x,q.y,q.r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#171000';ctx.shadowBlur=0;ctx.font=`bold ${q.type==='coin'?22:24}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(q.type==='coin'?'$':'✹',q.x,q.y+1);ctx.restore()}"""
+          assert anchor in s
+          s=s.replace(anchor,anchor+drawspecial,1)
+
+          # Muzzle blast grows with cannon evolution and power upgrade.
+          old="function makeShot(vx,vy){let c=cannon(),cd=cannonDefs[state.cannonLevel],r=(11+state.up.size*1.7)*cd.size;return{x:c.x+38,y:c.y-8,vx:vx*cd.power,vy:vy*cd.power,r,life:0,bounces:cd.bounces+state.up.bounce,alive:true,didImpact:false}}function shoot(vx,vy){state.shot=makeShot(vx,vy);state.shotActive=true;"
+          new="function makeShot(vx,vy){let c=cannon(),cd=cannonDefs[state.cannonLevel],r=(11+state.up.size*1.7)*cd.size;return{x:c.x+38,y:c.y-8,vx:vx*cd.power,vy:vy*cd.power,r,life:0,bounces:cd.bounces+state.up.bounce,alive:true,didImpact:false}}function muzzleBlast(vx,vy){let c=cannon(),a=Math.atan2(vy,vx),power=1+state.cannonLevel*.55+state.up.power*.16,mx=c.x+Math.cos(a)*(54+state.cannonLevel*5),my=c.y+Math.sin(a)*(54+state.cannonLevel*5);burst(mx,my,'#fff',Math.round(12+power*7),150+power*75);burst(mx,my,'#ff9a52',Math.round(8+power*5),120+power*60);state.waves.push({x:mx,y:my,r:4,prev:4,max:22+power*13,speed:280+power*35,life:0,color:'#ffe35c'});state.flash=Math.max(state.flash,.05+power*.025);state.shake=Math.max(state.shake,2+power*1.5)}function shoot(vx,vy){state.shot=makeShot(vx,vy);muzzleBlast(vx,vy);state.shotActive=true;"
+          assert old in s
+          s=s.replace(old,new)
+
+          p.write_text(s)
+          PY
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Expand NEON cannon and node progression"
+          git push
