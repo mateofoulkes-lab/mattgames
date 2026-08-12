@@ -1,4 +1,4 @@
-import { AVATARS } from '../game-data.js?v=0.10.3';
+import { AVATARS } from '../game-data.js?v=0.10.4';
 
 const PUBLISHABLE_KEY='pk_live_f3999f9364b91c8c878fe6d646063389eee28486';
 const CHANNEL='topo-global-v1';
@@ -7,7 +7,7 @@ const APP_MARK='mattgames-social-whatsapp-v1';
 const SOCIAL_ACTION='social7';
 const PASSWORD_HASH='f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const ADMIN_PROOF=PASSWORD_HASH;
-const CURRENT_CLIENT='0.10.3';
+const CURRENT_CLIENT='0.10.4';
 const ADMIN_LOGICAL_ID=`superadmin${crypto.randomUUID().replace(/-/g,'').slice(0,14)}`;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

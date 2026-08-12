@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.3';
+import { AVATARS } from './game-data.js?v=0.10.4';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.3';
+const VERSION = '0.10.4';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -246,7 +246,7 @@ function handleEnvelope(peerId,data){
     case 'spy-guess-location': return onSpyGuessLocation(data.payload,cid);
     case 'superadmin-hello': return onSuperadminHello(data.payload,cid);
     case 'superadmin-command': return onSuperadminCommand(data.payload,cid);
-    case 'system': return addSystem(data.payload?.text||'');
+    case 'system': return onSystem(data.payload,cid);
   }
 }
 
@@ -970,8 +970,17 @@ function renderRoomLobby(){
 function addSystem(text){
   if(!text)return;
   const msg={id:uid(),system:true,text,ts:now()};
+  if(state.mode==='incognito'&&state.started&&isAdmin){state.chatSeq=Number(state.chatSeq||0)+1;msg.seq=state.chatSeq;msg.canonical=true;}
   if(!state.messages.some(m=>m.id===msg.id))state.messages.push(msg);
-  if(isAdmin&&joined) send('system',{text}).catch(()=>{});
+  if(isAdmin&&joined) send('system',msg).catch(()=>{});
+  renderMessages();
+}
+function onSystem(payload,cid){
+  const text=payload?.text||''; if(!text)return;
+  const msg={id:payload.id||uid(),system:true,text,ts:Number(payload.ts||now()),seq:Number(payload.seq||0),canonical:payload.canonical===true};
+  if(state.messages.some(m=>m.id===msg.id))return;
+  state.messages.push(msg);
+  if(state.mode==='incognito')state.messages.sort((a,b)=>Number(a.seq||0)-Number(b.seq||0)||Number(a.ts||0)-Number(b.ts||0));
   renderMessages();
 }
 function onChat(msg,cid){
