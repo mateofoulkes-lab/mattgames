@@ -34,7 +34,7 @@ jobs:
           curl -fL --retry 3 'https://at.adobe.com/ZTRgkcokp8WSzNSr' -o towerchain/assets/generated/cards_atlas.webp
           curl -fL --retry 3 'https://at.adobe.com/Vwqk9EF2yftHfK21' -o towerchain/assets/generated/battlefield.jpg
           curl -fL --retry 3 'https://at.adobe.com/KJCRP45VmTnLxrsq' -o towerchain/assets/generated/splash.jpg
-          curl -fL --retry 3 'https://at.adobe.com/c4l2gEQz0JdRF7RN' -o towerchain/assets/generated/hud.jpg
+          curl -fL --retry 3 'https://at.adobe.com/KBpFyD1uDHel53p1' -o towerchain/assets/generated/hud_transparent.png
           file towerchain/assets/generated/*
       - name: Commit runtime art
         shell: bash
