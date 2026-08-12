@@ -1,3 +1,5 @@
+import { AVATARS } from '../game-data.js?v=0.9.0';
+
 const PUBLISHABLE_KEY='pk_live_f3999f9364b91c8c878fe6d646063389eee28486';
 const CHANNEL='topo-global-v1';
 const ADAPTER_MARK='eltopo-metered-v1';
@@ -5,190 +7,136 @@ const APP_MARK='mattgames-social-whatsapp-v1';
 const SOCIAL_ACTION='social7';
 const PASSWORD_HASH='f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const ADMIN_PROOF=PASSWORD_HASH;
+const CURRENT_CLIENT='0.9.0';
 const ADMIN_LOGICAL_ID=`superadmin${crypto.randomUUID().replace(/-/g,'').slice(0,14)}`;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now=()=>Date.now();
 
-let peer=null;
-let connected=false;
-const clients=new Map(); // meteredId -> info
+let peer=null,connected=false,selectedRoom=null,currentTab='overview';
+const clients=new Map();
 const logicalToMetered=new Map();
-const aliases=loadAliases();
+const aliases=loadJSON('eltopo-superadmin-aliases-v2',{});
+const roomLogs=new Map();
+const seenJoins=new Set();
+const pingRequests=new Map();
+const stats=loadJSON('eltopo-superadmin-stats-v2',{rooms:{},clients:{},modeStarts:{},messages:0,reconnects:0});
 
-function loadAliases(){try{return JSON.parse(localStorage.getItem('eltopo-superadmin-aliases-v1')||'{}')}catch{return {}}}
-function saveAliases(){localStorage.setItem('eltopo-superadmin-aliases-v1',JSON.stringify(aliases));}
+function loadJSON(k,fallback){try{return JSON.parse(localStorage.getItem(k)||'')||fallback}catch{return fallback}}
+function saveJSON(k,v){localStorage.setItem(k,JSON.stringify(v));}
 function toast(text){const e=$('toast');if(!e)return;e.textContent=text;e.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.add('hidden'),2200)}
 function status(text,kind='wait'){const e=$('connectionState');if(!e)return;e.textContent=text;e.className=`status ${kind}`;}
 function toHex(buffer){return [...new Uint8Array(buffer)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 async function sha256(text){return toHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)));}
+function fmtTime(ts){return new Date(ts||now()).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+function age(ts){const s=Math.max(0,Math.floor((now()-(ts||now()))/1000));if(s<60)return `${s}s`;const m=Math.floor(s/60);if(m<60)return `${m}m`;return `${Math.floor(m/60)}h ${m%60}m`;}
+function semverOld(v){const a=String(v||'0').split('.').map(Number),b=CURRENT_CLIENT.split('.').map(Number);for(let i=0;i<3;i++){if((a[i]||0)<(b[i]||0))return true;if((a[i]||0)>(b[i]||0))return false;}return false;}
+function avatarSrc(id){const a=AVATARS.find(x=>x.id===id);return a?`../${a.file.replace(/^\.\//,'')}`:'';}
+function saveAliases(){saveJSON('eltopo-superadmin-aliases-v2',aliases)}
+function saveStats(){saveJSON('eltopo-superadmin-stats-v2',stats)}
 
-$('loginForm').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const hash=await sha256($('password').value);
-  if(hash!==PASSWORD_HASH){$('loginError').textContent='Contraseña incorrecta.';$('password').select();return;}
-  sessionStorage.setItem('eltopo-superadmin-unlocked','1');
-  unlock();
-});
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();const hash=await sha256($('password').value);if(hash!==PASSWORD_HASH){$('loginError').textContent='Contraseña incorrecta.';$('password').select();return;}sessionStorage.setItem('eltopo-superadmin-unlocked','1');unlock();});
 $('logoutBtn').addEventListener('click',()=>{sessionStorage.removeItem('eltopo-superadmin-unlocked');location.reload();});
-
-function unlock(){
-  $('loginView').classList.add('hidden');
-  $('dashboardView').classList.remove('hidden');
-  connect();
-}
+$('refreshBtn').addEventListener('click',()=>{for(const c of identifiedClients())sendHello(c);render();toast('Telemetría solicitada');});
+function unlock(){$('loginView').classList.add('hidden');$('dashboardView').classList.remove('hidden');connect();}
 if(sessionStorage.getItem('eltopo-superadmin-unlocked')==='1')unlock();
 
 function sdkClass(){return globalThis.MeteredPeer?.MeteredPeer||null;}
-function adminIntro(){return {__adapter:ADAPTER_MARK,kind:'intro',logicalId:ADMIN_LOGICAL_ID};}
-async function sendAdminIntro(meteredId){try{await peer?.sendTo(meteredId,adminIntro());}catch{}}
+function adminAdapterEnvelope(kind,extra={}){return {__adapter:ADAPTER_MARK,kind,logicalId:ADMIN_LOGICAL_ID,...extra};}
+async function sendAdminIntro(meteredId){try{await peer?.sendTo(meteredId,adminAdapterEnvelope('intro'));}catch{}}
+function socialEnvelope(room,type,payload={}){return {__app:APP_MARK,room,type,from:ADMIN_LOGICAL_ID,payload,ts:now()};}
+function outerSocial(room,type,payload={}){return adminAdapterEnvelope('action',{action:SOCIAL_ACTION,payload:socialEnvelope(room,type,payload)});}
+async function sendToClient(c,type,payload={}){if(!peer||!c?.meteredId||!c?.room)throw new Error('Cliente no identificado');return peer.sendTo(c.meteredId,outerSocial(c.room,type,payload));}
+async function sendHello(c){try{await sendToClient(c,'superadmin-hello',{proof:ADMIN_PROOF,adminId:ADMIN_LOGICAL_ID});}catch{}}
 
 async function connect(){
-  if(connected||peer)return;
-  const MeteredPeer=sdkClass();
-  if(!MeteredPeer){status('SDK no cargó','error');return;}
-  status('Conectando…','wait');
-  peer=new MeteredPeer({apiKey:PUBLISHABLE_KEY});
-  peer.on('state-change',({to})=>{
-    if(to==='joined'){connected=true;status('En vivo','ok');}
-    else if(to==='closed'){connected=false;status('Desconectado','error');}
-    else if(to==='reconnecting')status('Reconectando…','wait');
-  });
-  peer.on('peer-joined',({peer:remote})=>{
-    const info={meteredId:remote.id,remote,logicalId:null,room:null,name:null,avatar:null,version:null,isAdmin:false,lastSeen:Date.now(),ip:null,candidateType:null,route:'conectando'};
-    clients.set(remote.id,info);
-    wireRemote(info);
-    sendAdminIntro(remote.id);
-    render();
-  });
-  peer.on('peer-left',({peer:remote})=>{
-    const info=clients.get(remote.id);
-    if(info?.logicalId)logicalToMetered.delete(info.logicalId);
-    clients.delete(remote.id);
-    render();
-  });
+  if(connected||peer)return;const MeteredPeer=sdkClass();if(!MeteredPeer){status('SDK no cargó','error');return;}status('Conectando…');peer=new MeteredPeer({apiKey:PUBLISHABLE_KEY});
+  peer.on('state-change',({to})=>{if(to==='joined'){connected=true;status('En vivo','ok');}else if(to==='closed'){connected=false;status('Desconectado','error');}else if(to==='reconnecting')status('Reconectando…');});
+  peer.on('peer-joined',({peer:remote})=>{const info={meteredId:remote.id,remote,logicalId:null,room:null,name:null,avatar:null,version:null,isAdmin:false,lastSeen:now(),ip:null,candidateType:null,protocol:'',route:'conectando',telemetry:null,ping:null,reconnects:0};clients.set(remote.id,info);wireRemote(info);sendAdminIntro(remote.id);render();});
+  peer.on('peer-left',({peer:remote})=>{const c=clients.get(remote.id);if(c?.room)log(c.room,'NET',`${label(c)} se desconectó`,'bad');if(c?.logicalId)logicalToMetered.delete(c.logicalId);clients.delete(remote.id);render();});
   peer.on('data',({senderPeerId,data})=>onData(senderPeerId,data));
-  peer.on('error',({err})=>{console.error('[ElTopo Superadmin]',err);status('Error de conexión','error');});
-  try{await peer.join(CHANNEL);connected=true;status('En vivo','ok');}
-  catch(err){console.error(err);status('No pudo conectar','error');}
+  peer.on('error',({err})=>{console.error('[Superadmin]',err);status('Error de conexión','error');});
+  try{await peer.join(CHANNEL);connected=true;status('En vivo','ok');}catch(err){console.error(err);status('No pudo conectar','error');}
 }
 
 function wireRemote(info){
-  const remote=info.remote;
-  remote.on?.('state-change',({to})=>{info.route=to||info.route;if(to==='connected')refreshNetwork(info);render();});
-  remote.on?.('connection-reset',()=>{info.route='reconectando';render();});
+  const r=info.remote;
+  r.on?.('state-change',({to})=>{info.route=to||info.route;if(to==='connected')refreshNetwork(info);render();});
+  r.on?.('connection-reset',()=>{info.route='reconectando';info.reconnects++;stats.reconnects++;saveStats();if(info.room)log(info.room,'RTC',`${label(info)} reconectando`,'bad');render();});
+  r.on?.('negotiation-error',()=>{if(info.room)log(info.room,'RTC',`${label(info)} tuvo error de negociación`,'bad');});
   refreshNetwork(info);
 }
+async function selectedCandidate(remote){try{const st=await remote.pc?.getStats?.();if(!st)return null;let pair=null;st.forEach(r=>{if(r.type==='transport'&&r.selectedCandidatePairId)pair=st.get(r.selectedCandidatePairId)||pair;});if(!pair)st.forEach(r=>{if(r.type==='candidate-pair'&&r.state==='succeeded'&&(r.nominated||r.selected))pair=r;});if(!pair)return null;const rc=st.get(pair.remoteCandidateId);if(!rc)return null;return {address:rc.address||rc.ip||rc.ipAddress||null,type:rc.candidateType||'unknown',protocol:rc.protocol||''};}catch{return null}}
+async function refreshNetwork(info){const c=await selectedCandidate(info.remote);if(!c)return;info.ip=c.address;info.candidateType=c.type;info.protocol=c.protocol;info.route=c.type==='relay'?'TURN relay':'directo';render();}
+setInterval(()=>{for(const c of clients.values())refreshNetwork(c);},4000);
 
-async function selectedCandidate(remote){
-  try{
-    const stats=await remote.pc?.getStats?.(); if(!stats)return null;
-    let pair=null;
-    stats.forEach(r=>{if(r.type==='transport'&&r.selectedCandidatePairId)pair=stats.get(r.selectedCandidatePairId)||pair;});
-    if(!pair)stats.forEach(r=>{if(r.type==='candidate-pair'&&r.state==='succeeded'&&(r.nominated||r.selected))pair=r;});
-    if(!pair)return null;
-    const rc=stats.get(pair.remoteCandidateId); if(!rc)return null;
-    return {address:rc.address||rc.ip||rc.ipAddress||null,type:rc.candidateType||'unknown',protocol:rc.protocol||''};
-  }catch{return null;}
-}
-async function refreshNetwork(info){
-  const c=await selectedCandidate(info.remote);
-  if(!c)return;
-  info.ip=c.address;
-  info.candidateType=c.type;
-  info.protocol=c.protocol;
-  info.route=c.type==='relay'?'TURN relay':'directo';
-  render();
-}
-setInterval(()=>{for(const info of clients.values())refreshNetwork(info);},3500);
-
+function ensureClient(senderPeerId){let c=clients.get(senderPeerId);if(!c){c={meteredId:senderPeerId,remote:null,lastSeen:now(),route:'señal'};clients.set(senderPeerId,c);}c.lastSeen=now();return c;}
+function label(c){return aliases[c?.logicalId]||c?.name||c?.logicalId||c?.meteredId||'Jugador';}
 function onData(senderPeerId,data){
-  if(!data||data.__adapter!==ADAPTER_MARK)return;
-  const info=clients.get(senderPeerId)||{meteredId:senderPeerId,remote:null,lastSeen:Date.now()};
-  clients.set(senderPeerId,info); info.lastSeen=Date.now();
-  if(data.logicalId){
-    info.logicalId=data.logicalId;
-    logicalToMetered.set(data.logicalId,senderPeerId);
-  }
-  if(data.kind==='intro'){
-    sendAdminIntro(senderPeerId);
-    render();
-    return;
-  }
-  if(data.kind!=='action'||data.action!==SOCIAL_ACTION)return;
-  const env=data.payload;
-  if(!env||env.__app!==APP_MARK)return;
-  info.room=env.room||info.room;
-  if(env.from){info.logicalId=env.from;logicalToMetered.set(env.from,senderPeerId);}
-  if(env.type==='intro'){
-    const p=env.payload||{};
-    info.logicalId=p.clientId||info.logicalId;
-    info.name=String(p.name||'Jugador').slice(0,40);
-    info.avatar=p.avatar||null;
-    info.version=p.version||null;
-    info.isAdmin=!!p.admin;
-    if(info.logicalId)logicalToMetered.set(info.logicalId,senderPeerId);
-  }
+  if(!data||data.__adapter!==ADAPTER_MARK)return;const c=ensureClient(senderPeerId);if(data.logicalId){c.logicalId=data.logicalId;logicalToMetered.set(data.logicalId,senderPeerId);}if(data.kind==='intro'){sendAdminIntro(senderPeerId);render();return;}if(data.kind!=='action'||data.action!==SOCIAL_ACTION)return;
+  const env=data.payload;if(!env||env.__app!==APP_MARK)return;c.room=env.room||c.room;if(env.from){c.logicalId=env.from;logicalToMetered.set(env.from,senderPeerId);}if(c.room){stats.rooms[c.room]=1;if(c.logicalId)stats.clients[c.logicalId]=1;saveStats();}
+  if(env.type==='intro')onGameIntro(c,env.payload||{});
+  else if(env.type==='superadmin-state')onTelemetry(c,env.payload||{});
+  else if(env.type==='superadmin-pong')onPong(c,env.payload||{});
+  else observeEvent(c,env);
   render();
 }
+function onGameIntro(c,p){c.logicalId=p.clientId||c.logicalId;c.name=String(p.name||'Jugador').slice(0,40);c.avatar=p.avatar||null;c.version=p.version||null;c.isAdmin=!!p.admin;if(c.logicalId)logicalToMetered.set(c.logicalId,c.meteredId);const key=`${c.room}:${c.logicalId}`;if(!seenJoins.has(key)){seenJoins.add(key);log(c.room,'JOIN',`${c.name} se conectó${c.isAdmin?' como admin':''}`);}sendHello(c);}
+function onTelemetry(c,t){const prev=c.telemetry;c.telemetry=t;c.name=t.name||c.name;c.avatar=t.avatar||c.avatar;c.version=t.version||c.version;c.isAdmin=!!t.isAdmin;c.lastSeen=now();if(prev){if(prev.mode!==t.mode||prev.phase!==t.phase||prev.started!==t.started)log(c.room,'STATE',`${label(c)}: ${t.mode||'lobby'} · ${t.phase||'lobby'}`);}if(t.isAdmin&&t.canonical?.state){const st=t.canonical.state;if(prev?.canonical?.state?.mode!==st.mode&&st.mode)log(c.room,'MODE',`Modo: ${st.mode}`);if(!prev?.canonical?.state?.started&&st.started){log(c.room,'START',`Comenzó ${st.mode}`);stats.modeStarts[st.mode]=(stats.modeStarts[st.mode]||0)+1;saveStats();}}}
+function onPong(c,p){const req=pingRequests.get(p.requestId);if(!req)return;c.ping=now()-req.started;pingRequests.delete(p.requestId);log(c.room,'PING',`${label(c)}: ${c.ping} ms`);}
+function observeEvent(c,env){const p=env.payload||{};switch(env.type){case 'chat':stats.messages++;saveStats();log(c.room,'CHAT',`${p.senderName||label(c)}: ${String(p.text||'').slice(0,160)}`);break;case 'lobby-chat':if(!p.system){stats.messages++;saveStats();log(c.room,'LOBBY',`${p.senderName||label(c)}: ${String(p.text||'').slice(0,160)}`);}break;case 'system':log(c.room,'SYS',String(p.text||'').slice(0,180));break;case 'mode':log(c.room,'MODE',`Modo seleccionado: ${p.mode}`);break;case 'guess':log(c.room,'VOTE',`${label(c)} emitió/cambió un voto`);break;case 'spy-vote':log(c.room,'VOTE',`${label(c)} votó en Spyfall`);break;case 'mixed-countdown':log(c.room,'TIMER','Comenzó cuenta regresiva de votación');break;case 'mixed-final':log(c.room,'END','Terminó Todo mezclado');break;case 'spy-final':log(c.room,'END',p.result||'Terminó Spyfall');break;case 'return-lobby':log(c.room,'LOBBY','La partida volvió al lobby');break;}}
 
-function roomGroups(){
-  const groups=new Map();
-  for(const c of clients.values()){
-    if(!c.room||!c.logicalId||!c.name)continue;
-    if(!groups.has(c.room))groups.set(c.room,[]);
-    groups.get(c.room).push(c);
-  }
-  return [...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
-}
-function identifiedClients(){return [...clients.values()].filter(c=>c.room&&c.logicalId&&c.name);}
-function unknownClients(){return [...clients.values()].filter(c=>!c.room||!c.logicalId||!c.name);}
+function log(room,type,text,kind=''){if(!room)return;const a=roomLogs.get(room)||[];a.push({ts:now(),type,text,kind});if(a.length>600)a.splice(0,a.length-600);roomLogs.set(room,a);renderSummary();if(selectedRoom===room&&currentTab==='timeline')renderTimeline();}
+function roomGroups(){const g=new Map();for(const c of identifiedClients()){if(!g.has(c.room))g.set(c.room,[]);g.get(c.room).push(c);}return [...g.entries()].sort((a,b)=>a[0].localeCompare(b[0]));}
+function identifiedClients(){return [...clients.values()].filter(c=>c.room&&c.logicalId&&c.name)}
+function unknownClients(){return [...clients.values()].filter(c=>!c.room||!c.logicalId||!c.name)}
+function roomClients(room){return identifiedClients().filter(c=>c.room===room)}
+function roomHost(room){return roomClients(room).find(c=>c.telemetry?.isAdmin||c.isAdmin)||null}
+function canonical(room){return roomHost(room)?.telemetry?.canonical?.state||null}
+function hostHash(room){return roomHost(room)?.telemetry?.stateHash||null}
+function isDesync(c){const h=hostHash(c.room);return !!(h&&c.telemetry?.stateHash&&h!==c.telemetry.stateHash)}
 
-function networkHtml(c){
-  if(!c.ip)return `<span class="net-main">No expuesta</span><span class="net-sub">${esc(c.route||'RTC')}</span>`;
-  if(c.candidateType==='relay')return `<span class="net-main">${esc(c.ip)}</span><span class="net-sub">TURN relay · no es IP real del jugador</span>`;
-  return `<span class="net-main">${esc(c.ip)}</span><span class="net-sub">${esc(c.candidateType||'RTC')} ${esc(c.protocol||'')}</span>`;
-}
-function render(){
-  const groups=roomGroups(),identified=identifiedClients(),unknown=unknownClients();
-  $('roomCount').textContent=groups.length;
-  $('playerCount').textContent=identified.length;
-  $('unknownCount').textContent=unknown.length;
-  $('rooms').innerHTML=groups.length?groups.map(([room,list])=>roomHtml(room,list)).join(''):'<div class="notice"><strong>Sin salas activas</strong><span>Cuando alguien entre a El Topo aparecerá acá en tiempo real.</span></div>';
-  $('unknownPeers').classList.toggle('hidden',!unknown.length);
-  $('unknownList').innerHTML=unknown.map(c=>`<div class="unknown-peer">${esc(c.logicalId||c.meteredId)} · esperando identificación del juego…</div>`).join('');
-  bindRows();
-}
-function roomHtml(room,list){
-  const sorted=[...list].sort((a,b)=>(b.isAdmin?1:0)-(a.isAdmin?1:0)||(a.name||'').localeCompare(b.name||''));
-  return `<article class="room-card"><header class="room-head"><div class="room-title"><span>🎮</span><div><div class="room-code">${esc(room)}</div><div class="room-meta">${sorted.length} jugador${sorted.length===1?'':'es'} activo${sorted.length===1?'':'s'}</div></div></div></header><table class="player-table"><thead><tr><th>Jugador</th><th>Alias privado</th><th>IP WebRTC</th><th>Conexión</th><th>Acciones</th></tr></thead><tbody>${sorted.map(playerRow).join('')}</tbody></table></article>`;
-}
-function playerRow(c){
-  const key=c.logicalId||c.meteredId; const alias=aliases[key]||'';
-  return `<tr data-client="${esc(c.meteredId)}"><td data-label="Jugador"><div class="player-main"><strong>${esc(c.name||'Jugador')} ${c.isAdmin?'<span class="pill admin">ADMIN SALA</span>':''}</strong><small>${esc(c.logicalId||c.meteredId)}${c.version?` · v${esc(c.version)}`:''}</small></div></td><td data-label="Alias privado"><input class="alias-input" data-alias="${esc(key)}" value="${esc(alias)}" placeholder="Ej. Dani celu"></td><td data-label="IP WebRTC">${networkHtml(c)}</td><td data-label="Conexión"><span class="pill ${c.candidateType==='relay'?'relay':c.ip?'direct':'unknown'}">${esc(c.route||'RTC')}</span></td><td data-label="Acciones"><div class="row-actions"><button class="rename" data-rename="${esc(c.meteredId)}">Cambiar nombre</button><button class="kick" data-kick="${esc(c.meteredId)}">Echar</button></div></td></tr>`;
-}
-function bindRows(){
-  document.querySelectorAll('[data-alias]').forEach(input=>input.addEventListener('change',()=>{aliases[input.dataset.alias]=input.value.trim();if(!aliases[input.dataset.alias])delete aliases[input.dataset.alias];saveAliases();toast('Alias guardado');}));
-  document.querySelectorAll('[data-rename]').forEach(btn=>btn.addEventListener('click',()=>renameClient(btn.dataset.rename)));
-  document.querySelectorAll('[data-kick]').forEach(btn=>btn.addEventListener('click',()=>kickClient(btn.dataset.kick)));
+function render(){renderSummary();renderRooms();if(selectedRoom)renderInspector();renderUnknown();}
+function renderSummary(){const ids=identifiedClients();$('roomCount').textContent=roomGroups().length;$('playerCount').textContent=ids.length;$('relayCount').textContent=ids.filter(c=>c.candidateType==='relay').length;$('desyncCount').textContent=ids.filter(isDesync).length;$('logCount').textContent=[...roomLogs.values()].reduce((n,a)=>n+a.length,0);}
+function renderRooms(){const groups=roomGroups();$('rooms').innerHTML=groups.length?groups.map(([room,list])=>{const st=canonical(room),des=list.filter(isDesync).length,relay=list.filter(c=>c.candidateType==='relay').length;return `<button class="room-item ${selectedRoom===room?'active':''}" data-room="${esc(room)}"><div class="room-item-top"><div><div class="room-code">${esc(room)}</div><div class="room-mode">${esc(st?.mode||'lobby')} · ${esc(st?.phase||'lobby')}</div></div><strong>${list.length}</strong></div><small>${st?.started?'partida activa':'en lobby'} · creada hace ${age(st?.createdAt)}</small><div class="room-health"><span class="pill ${des?'bad':'ok'}">${des?`${des} desync`:'sync OK'}</span>${relay?`<span class="pill relay">${relay} TURN</span>`:''}${st?.roomLocked?'<span class="pill warn">LOCK</span>':''}${st?.chatDisabled?'<span class="pill bad">CHAT OFF</span>':''}</div></button>`;}).join(''):'<div class="notice"><span>Sin salas activas.</span></div>';$('rooms').querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>{selectedRoom=b.dataset.room;render();});}
+function renderUnknown(){const u=unknownClients();$('unknownPeers').classList.toggle('hidden',!u.length);$('unknownList').innerHTML=u.map(c=>`<div class="unknown-peer">${esc(c.logicalId||c.meteredId)} · ${esc(c.route||'conectando')}</div>`).join('');}
+
+function renderInspector(){const st=canonical(selectedRoom),list=roomClients(selectedRoom);$('emptyInspector').classList.add('hidden');$('roomInspector').classList.remove('hidden');$('inspectTitle').textContent=selectedRoom;$('inspectMeta').textContent=`${list.length} conectados · ${st?.mode||'lobby'} · ${st?.phase||'lobby'} · ${st?.started?'partida activa':'esperando'}`;renderOverview();renderPlayers();renderChat();renderQA();renderTimeline();renderState();}
+function renderOverview(){const st=canonical(selectedRoom),list=roomClients(selectedRoom),host=roomHost(selectedRoom),sync=list.filter(c=>!isDesync(c)).length;$('overviewCards').innerHTML=[['Modo',st?.mode||'—'],['Fase',st?.phase||'lobby'],['Host',label(host)],['Sync',`${sync}/${list.length}`],['Mensajes',String(st?.messages?.length||0)],['Lobby msgs',String(st?.lobbyMessages?.length||0)],['Trigger',st?.trigger||'—'],['Creada',age(st?.createdAt)]].map(([a,b])=>`<article class="stat-card"><span>${esc(a)}</span><strong>${esc(b)}</strong></article>`).join('');
+  $('roomControls').innerHTML=`<button class="primary" data-roomcmd="start">▶ Iniciar</button><button class="ghost" data-roomcmd="return-lobby">↩ Lobby</button><button class="ghost" data-roomcmd="restart">⟳ Reiniciar</button><button class="danger" data-roomcmd="finish">■ Finalizar</button><button class="ghost" data-roomcmd="room-lock" data-value="${st?.roomLocked?'0':'1'}">${st?.roomLocked?'🔓 Habilitar ingresos':'🔒 Bloquear ingresos'}</button><button class="ghost" data-roomcmd="timer" data-value="10000">+10s timer</button><button class="ghost" data-roomcmd="timer" data-value="-10000">−10s timer</button><select id="modeSelect"><option value="mixed">Todo mezclado</option><option value="incognito">Incógnito</option><option value="spyfall">Spyfall</option></select><button id="setModeBtn" class="ghost">Cambiar modo</button>`;
+  $('modeSelect').value=st?.mode||'mixed';bindRoomCmds();$('setModeBtn').onclick=()=>roomCommand('set-mode',$('modeSelect').value);$('sendSystemBtn').onclick=()=>{const v=$('systemMessage').value.trim();if(v){roomCommand('system-message',v);$('systemMessage').value='';}};
 }
 
-async function sendCommand(c,command,value=''){
-  if(!peer||!c?.meteredId||!c?.logicalId||!c?.room)throw new Error('Cliente no identificado');
-  const social={__app:APP_MARK,room:c.room,type:'superadmin-command',from:ADMIN_LOGICAL_ID,payload:{proof:ADMIN_PROOF,command,targetId:c.logicalId,value},ts:Date.now()};
-  const outer={__adapter:ADAPTER_MARK,kind:'action',action:SOCIAL_ACTION,logicalId:ADMIN_LOGICAL_ID,payload:social};
-  await peer.sendTo(c.meteredId,outer);
-}
-async function renameClient(meteredId){
-  const c=clients.get(meteredId); if(!c)return;
-  const value=prompt(`Nuevo nombre para ${c.name}:`,c.name||'');
-  if(value===null)return;
-  const name=value.trim().slice(0,20); if(!name)return;
-  try{await sendCommand(c,'rename',name);c.name=name;render();toast('Renombre enviado');}catch(e){toast(`Error: ${e.message}`);}
-}
-async function kickClient(meteredId){
-  const c=clients.get(meteredId); if(!c)return;
-  if(!confirm(`¿Echar a ${c.name||'este jugador'} de la sala ${c.room}?`))return;
-  try{await sendCommand(c,'kick');toast('Expulsión enviada');}catch(e){toast(`Error: ${e.message}`);}
-}
+function playerFlags(c){const m=canonical(c.room)?.members?.[c.logicalId]||{},t=c.telemetry||{};return {muted:!!m.muted||!!t.flags?.muted,voteBlocked:!!m.voteBlocked||!!t.flags?.voteBlocked,spectator:!!m.spectator||!!t.flags?.spectator};}
+function networkHtml(c){if(!c.ip)return `<div class="network">No expuesta<small>${esc(c.route||'RTC')}</small></div>`;if(c.candidateType==='relay')return `<div class="network">${esc(c.ip)}<small>TURN relay · no es IP real</small></div>`;return `<div class="network">${esc(c.ip)}<small>${esc(c.candidateType||'RTC')} ${esc(c.protocol||'')}</small></div>`;}
+function renderPlayers(){const list=roomClients(selectedRoom),hh=hostHash(selectedRoom);$('playersPanel').innerHTML=`<div class="panel"><div class="panel-head"><h3>Jugadores y diagnóstico</h3><span class="muted">Hash host: ${esc(hh||'—')}</span></div><table class="player-table"><thead><tr><th>Jugador</th><th>Alias</th><th>Red</th><th>Estado</th><th>Foto</th><th>Acciones</th></tr></thead><tbody>${list.map(c=>playerRow(c)).join('')}</tbody></table></div>`;bindPlayerRows();}
+function playerRow(c){const f=playerFlags(c),old=semverOld(c.version),des=isDesync(c),key=c.logicalId;return `<tr class="${des?'desync':''}" data-client="${esc(c.meteredId)}"><td data-label="Jugador"><div class="player-main"><strong>${esc(c.name)} ${c.isAdmin?'<span class="pill admin">ADMIN</span>':''}</strong><small>${esc(key)} · v${esc(c.version||'?')} ${old?'⚠ vieja':''} · ping ${c.ping??'—'}ms</small></div></td><td data-label="Alias"><input class="alias-input" data-alias="${esc(key)}" value="${esc(aliases[key]||'')}" placeholder="Alias privado"></td><td data-label="Red">${networkHtml(c)}</td><td data-label="Estado"><div class="flags"><span class="pill ${des?'bad':'ok'}">${des?'DESYNC':'SYNC'}</span>${f.muted?'<span class="pill warn">MUTE</span>':''}${f.voteBlocked?'<span class="pill bad">NO VOTE</span>':''}${f.spectator?'<span class="pill unknown">ESPECTADOR</span>':''}</div></td><td data-label="Foto"><select class="avatar-select" data-avatar="${esc(c.meteredId)}">${AVATARS.map(a=>`<option value="${esc(a.id)}" ${a.id===c.avatar?'selected':''}>${esc(a.name)}</option>`).join('')}</select></td><td data-label="Acciones"><div class="player-actions"><button class="blue" data-act="rename" data-id="${esc(c.meteredId)}">Nombre</button><button class="green" data-act="ping" data-id="${esc(c.meteredId)}">Ping</button><button class="blue" data-act="reconnect" data-id="${esc(c.meteredId)}">Reconectar</button><button class="amber" data-act="mute" data-id="${esc(c.meteredId)}">${f.muted?'Desmutear':'Mutear'}</button><button class="amber" data-act="vote-block" data-id="${esc(c.meteredId)}">${f.voteBlocked?'Votos ON':'Votos OFF'}</button><button class="amber" data-act="spectator" data-id="${esc(c.meteredId)}">${f.spectator?'Jugador':'Espectador'}</button><button class="blue" data-act="transfer-admin" data-id="${esc(c.meteredId)}">Hacer admin</button><button class="red" data-act="ban" data-id="${esc(c.meteredId)}">Ban 15m</button><button class="red" data-act="kick" data-id="${esc(c.meteredId)}">Echar</button></div></td></tr>`;}
+function bindPlayerRows(){document.querySelectorAll('[data-alias]').forEach(i=>i.onchange=()=>{aliases[i.dataset.alias]=i.value.trim();if(!aliases[i.dataset.alias])delete aliases[i.dataset.alias];saveAliases();toast('Alias guardado');});document.querySelectorAll('[data-avatar]').forEach(s=>s.onchange=()=>{const c=clients.get(s.dataset.avatar);if(c)playerCommand(c,'avatar',s.value);});document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>handlePlayerAction(b.dataset.act,clients.get(b.dataset.id)));}
+async function handlePlayerAction(act,c){if(!c)return;if(act==='rename'){const v=prompt('Nuevo nombre:',c.name||'');if(v?.trim())playerCommand(c,'rename',v.trim().slice(0,20));return;}if(act==='ping'){pingClient(c);return;}if(act==='reconnect'){playerCommand(c,'reconnect');return;}const f=playerFlags(c);if(act==='mute'){playerCommand(c,'mute',!f.muted);return;}if(act==='vote-block'){playerCommand(c,'vote-block',!f.voteBlocked);return;}if(act==='spectator'){playerCommand(c,'spectator',!f.spectator);return;}if(act==='transfer-admin'){if(confirm(`¿Hacer administrador a ${c.name}?`))playerCommand(c,'transfer-admin',true);return;}if(act==='ban'){if(confirm(`¿Bloquear 15 minutos a ${c.name}?`))playerCommand(c,'ban',15);return;}if(act==='kick'){if(confirm(`¿Echar a ${c.name}?`))playerCommand(c,'kick');}}
 
+async function sendCommand(c,payload){return sendToClient(c,'superadmin-command',{proof:ADMIN_PROOF,...payload});}
+async function playerCommand(c,command,value){try{const host=roomHost(c.room);if(host?.meteredId===c.meteredId){await sendCommand(c,{command,targetId:c.logicalId,value,canonical:true});}else{await sendCommand(c,{command,targetId:c.logicalId,value});if(host)await sendCommand(host,{command,targetId:c.logicalId,value,canonical:true});}log(c.room,'ADMIN',`${command} → ${label(c)}`);toast('Orden enviada');}catch(e){toast(`Error: ${e.message}`);}}
+async function roomCommand(command,value=null,extra={}){const host=roomHost(selectedRoom);if(!host){toast('No encuentro host');return;}try{await sendCommand(host,{command,value,roomCommand:true,...extra});log(selectedRoom,'ADMIN',`Sala: ${command}`);toast('Orden enviada');}catch(e){toast(`Error: ${e.message}`);}}
+function bindRoomCmds(){document.querySelectorAll('[data-roomcmd]').forEach(b=>b.onclick=()=>roomCommand(b.dataset.roomcmd,b.dataset.value==='1'?true:b.dataset.value==='0'?false:Number.isNaN(Number(b.dataset.value))?b.dataset.value:Number(b.dataset.value)));}
+function pingClient(c){const requestId=crypto.randomUUID();pingRequests.set(requestId,{started:now(),client:c.meteredId});sendCommand(c,{command:'ping',targetId:c.logicalId,requestId}).catch(()=>{});}
+
+function renderChat(){const st=canonical(selectedRoom);if(!st){$('liveChat').innerHTML='<div class="muted">Esperando estado del host…</div>';return;}const msgs=st.started?st.messages||[]:st.lobbyMessages||[];$('toggleChatBtn').textContent=st.chatDisabled?'Activar chat':'Desactivar chat';$('toggleChatBtn').onclick=()=>roomCommand('chat-disable',!st.chatDisabled);$('clearChatBtn').onclick=()=>{if(confirm('¿Borrar todo el chat actual?'))roomCommand('chat-clear');};$('liveChat').innerHTML=msgs.length?msgs.map(m=>chatRow(m,st)).join(''):'<div class="muted">Sin mensajes.</div>';bindChatTools();}
+function chatRow(m,st){const sender=st.members?.[m.senderId];const name=m.system?'Sistema':m.senderName||sender?.publicName||sender?.realName||'Jugador';return `<div class="chat-msg ${m.system?'system':''}"><div class="chat-msg-head"><strong>${esc(name)} ${st.pinnedMessageId===m.id?'📌':''}</strong><time>${fmtTime(m.ts)}</time></div><p>${esc(m.text||'')}</p>${m.system?'':`<div class="chat-tools"><button data-pin="${esc(m.id)}">Fijar</button><button data-edit="${esc(m.id)}">Editar</button><button data-delete="${esc(m.id)}">Borrar</button></div>`}</div>`;}
+function bindChatTools(){document.querySelectorAll('[data-pin]').forEach(b=>b.onclick=()=>roomCommand('pin-message',b.dataset.pin));document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>roomCommand('delete-message',b.dataset.delete));document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const st=canonical(selectedRoom),m=st?.messages?.find(x=>x.id===b.dataset.edit);const v=prompt('Editar mensaje:',m?.text||'');if(v!==null)roomCommand('edit-message',v,{messageId:b.dataset.edit});});}
+
+function renderQA(){const st=canonical(selectedRoom),list=roomClients(selectedRoom),members=Object.values(st?.members||{});const opts=members.map(m=>`<option value="${esc(m.id)}">${esc(m.realName||m.publicName||m.id)}</option>`).join('');$('qaPanel').innerHTML=`<div class="qa-grid"><section class="qa-box"><h3>🎭 Identidades / roles</h3><label>Próximo espía</label><select id="qaSpy"><option value="">Aleatorio</option>${opts}</select><button id="qaSpyBtn" class="ghost">Fijar próximo espía</button><label>Todo mezclado: jugador</label><select id="qaActor">${opts}</select><label>debe interpretar a</label><select id="qaTarget">${opts}</select><button id="qaMixedBtn" class="ghost">Forzar asignación</button></section><section class="qa-box"><h3>💬 Conversación</h3><label>Disparador</label><textarea id="qaTrigger" rows="4">${esc(st?.trigger||'')}</textarea><div class="qa-row"><button id="qaTriggerBtn" class="ghost">Cambiar disparador</button><button id="qaSystemBtn" class="ghost">Anunciarlo</button></div></section><section class="qa-box"><h3>🗳️ Votación</h3><button id="qaSimVotes" class="ghost">Simular votos faltantes</button><label>Votante</label><select id="qaVoter">${opts}</select><label>Objetivo</label><select id="qaVoteTarget">${opts}</select><label>Valor (nombre real para Todo mezclado)</label><input id="qaVoteValue" placeholder="Ej. Mateo"><button id="qaSetVote" class="ghost">Forzar voto</button></section><section class="qa-box"><h3>🔬 Estado secreto</h3>${secretStateHtml(st,list)}<div class="qa-row"><button id="qaFinish" class="danger">Forzar fin</button><button id="qaRestart" class="ghost">Reiniciar ronda</button></div></section></div>`;
+  $('qaSpyBtn').onclick=()=>roomCommand('force-spy',null,{targetId:$('qaSpy').value||null});$('qaMixedBtn').onclick=()=>{const actor=clientByLogical($('qaActor').value);if(actor)playerCommand(actor,'mixed-target',$('qaTarget').value);};$('qaTriggerBtn').onclick=()=>roomCommand('force-trigger',$('qaTrigger').value.trim());$('qaSystemBtn').onclick=()=>roomCommand('system-message',$('qaTrigger').value.trim());$('qaSimVotes').onclick=()=>roomCommand('simulate-votes');$('qaSetVote').onclick=()=>roomCommand('set-vote',$('qaVoteValue').value.trim(),{voterId:$('qaVoter').value,targetId:$('qaVoteTarget').value});$('qaFinish').onclick=()=>roomCommand('finish');$('qaRestart').onclick=()=>roomCommand('restart');}
+function secretStateHtml(st,list){if(!st)return '<p class="muted">Sin estado.</p>';if(st.mode==='spyfall')return `<p><b>Espía:</b> ${esc(st.members?.[st._spyId]?.realName||st._spyId||'—')}</p><p><b>Lugar:</b> ${esc(st._spyLocation||'—')}</p>`;if(st.mode==='mixed')return `<div>${Object.values(st.members||{}).map(m=>`<p><b>${esc(m.realName)}</b> → interpreta a <b>${esc(m.publicName)}</b></p>`).join('')}</div>`;if(st.mode==='incognito')return `<div>${Object.values(st.members||{}).map(m=>`<p><b>${esc(m.realName)}</b> → ${esc(m.publicName||'—')} · ${esc(m.occupation||'')}</p>`).join('')}</div>`;return '<p class="muted">Todavía no hay secretos de ronda.</p>';}
+function clientByLogical(id){const mid=logicalToMetered.get(id);return mid?clients.get(mid):null;}
+
+function renderTimeline(){const a=roomLogs.get(selectedRoom)||[];$('timeline').innerHTML=a.length?[...a].reverse().map(x=>`<div class="log-row ${x.kind||''}"><time>${fmtTime(x.ts)}</time><span class="log-type">${esc(x.type)}</span><span>${esc(x.text)}</span></div>`).join(''):'<div class="muted">Todavía no hay eventos.</div>';$('clearLogBtn').onclick=()=>{roomLogs.set(selectedRoom,[]);renderTimeline();renderSummary();};}
+function renderState(){const st=canonical(selectedRoom);$('stateJson').textContent=JSON.stringify(st||{},null,2);$('copyStateBtn').onclick=()=>navigator.clipboard?.writeText(JSON.stringify(st||{},null,2)).then(()=>toast('Estado copiado'));}
+
+function copyDiagnostics(){const list=roomClients(selectedRoom),st=canonical(selectedRoom);const text=[`EL TOPO DIAGNÓSTICO`, `Sala: ${selectedRoom}`,`Modo/fase: ${st?.mode||'—'} / ${st?.phase||'—'}`,`Started: ${!!st?.started}`,`Locked: ${!!st?.roomLocked} ChatDisabled: ${!!st?.chatDisabled}`,`Host hash: ${hostHash(selectedRoom)||'—'}`,...list.map(c=>`${label(c)} | id=${c.logicalId} | v=${c.version} | ping=${c.ping??'—'}ms | route=${c.route} | candidate=${c.candidateType||'—'} | ip=${c.ip||'—'} | hash=${c.telemetry?.stateHash||'—'} | ${isDesync(c)?'DESYNC':'SYNC'}`)].join('\n');navigator.clipboard?.writeText(text).then(()=>toast('Diagnóstico copiado'));}
+function exportHistory(){const st=canonical(selectedRoom),data={exportedAt:new Date().toISOString(),room:selectedRoom,state:st,log:roomLogs.get(selectedRoom)||[],clients:roomClients(selectedRoom).map(c=>({id:c.logicalId,name:c.name,alias:aliases[c.logicalId]||'',version:c.version,route:c.route,candidateType:c.candidateType,ping:c.ping}))};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`eltopo-${selectedRoom}-${Date.now()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),500);}
+$('copyDiagBtn').onclick=copyDiagnostics;$('exportBtn').onclick=exportHistory;
+
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id===`tab-${currentTab}`));if(selectedRoom)renderInspector();});
+
+setInterval(()=>{for(const c of identifiedClients())if(now()-c.lastSeen>2500)sendHello(c);render();},3000);
 render();
