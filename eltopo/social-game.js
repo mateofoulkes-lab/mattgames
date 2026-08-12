@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js';
+import { AVATARS } from './game-data.js?v=0.8.1';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.8.1';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
 const MIN_PLAYERS = 2;
@@ -87,6 +87,7 @@ let isAdmin = false;
 let joined = false;
 let connectTimer = null;
 let returnLobbyTimer = null;
+let lastMixedIntroTrigger = '';
 let myName = '';
 let myAvatar = null;
 let replyingTo = null;
@@ -124,15 +125,12 @@ function avatarMarkup(member, cls='wa-avatar-img'){
   return `<span class="wa-avatar-fallback">${esc(displayName(member).slice(0,1).toUpperCase())}</span>`;
 }
 
-function setConnectStatus(text, kind='wait'){
+function setConnectStatus(){
   const e=$('connectionBadge'); if(!e)return;
-  e.textContent=`v${VERSION} · ${text}`;
-  e.className=`connection-badge ${kind}`;
+  e.textContent=`v${VERSION}`;
+  e.className='connection-badge';
 }
-function updateConnectionBadge(){
-  const n=onlineMembers().length || (joined?1:0);
-  setConnectStatus(`${joined?'Metered online':'conectando'} · ${n} jugador${n===1?'':'es'}`, joined?'ok':'wait');
-}
+function updateConnectionBadge(){ setConnectStatus(); }
 
 async function connectToRoom(code, admin){
   roomCode=cleanCode(code); isAdmin=admin; joined=false; transportPeers.clear(); privateInfo=null; personaOptions=null;
@@ -301,22 +299,33 @@ function derangement(ids){
 }
 function startMixed(ids){
   const assigned=derangement(ids);
-  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.trigger=pick(TRIGGERS); state.messages=[]; replyingTo=null; enterMessenger();
+  const identities=Object.fromEntries(ids.map(id=>[id,{
+    name:state.members[id].realName,
+    avatar:state.members[id].lobbyAvatar||state.members[id].avatar||null
+  }]));
+  state.started=true; state.phase='playing'; state.mode='mixed'; state.final=false; state.scores=null; state.guesses={}; state.reveal=null; state.trigger=pick(TRIGGERS); state.messages=[]; replyingTo=null; lastMixedIntroTrigger=''; enterMessenger();
   ids.forEach((actorId,i)=>{
-    const targetId=assigned[i]; const targetName=state.members[targetId].realName;
-    state.members[actorId].publicName=targetName;
+    const targetId=assigned[i]; const target=identities[targetId];
+    state.members[actorId].publicName=target.name;
+    state.members[actorId].avatar=target.avatar;
     state.members[actorId].spectator=false;
-    const info={mode:'mixed',targetName,targetId,realName:state.members[actorId].realName};
-    if(actorId===selfId){ privateInfo=info; showPrivateCard(); }
+    const info={mode:'mixed',targetName:target.name,targetId,realName:state.members[actorId].realName};
+    if(actorId===selfId) privateInfo=info;
     else send('mixed-private',info,actorId).catch(()=>{});
   });
   send('start-mixed',{publicState:snapshotForClient()}).catch(()=>{});
   addSystem('🔀 Todo mezclado comenzó. Cada persona recibió a quién debe interpretar.');
   addSystem(`💬 Disparador: ${state.trigger}`);
   renderAll();
+  maybeShowMixedIntro();
 }
-function onStartMixed(p){ if(!p?.publicState)return; state=p.publicState; enterMessenger(); renderAll(); }
-function onMixedPrivate(p){ privateInfo=p; showPrivateCard(); }
+function onStartMixed(p){ if(!p?.publicState)return; state=p.publicState; enterMessenger(); renderAll(); maybeShowMixedIntro(); }
+function onMixedPrivate(p){ privateInfo=p; maybeShowMixedIntro(); }
+function maybeShowMixedIntro(){
+  if(state.mode!=='mixed'||!state.started||privateInfo?.mode!=='mixed'||!state.trigger||lastMixedIntroTrigger===state.trigger)return;
+  lastMixedIntroTrigger=state.trigger;
+  showModal('Todo mezclado',`<div class="mixed-start-modal"><span class="mixed-start-kicker">VAS A INTERPRETAR A</span><h2>${esc(privateInfo.targetName||'—')}</h2><div class="mixed-trigger-card"><span>DISPARADOR DE CONVERSACIÓN</span><strong>${esc(state.trigger)}</strong></div><button id="mixedStartClose" class="primary-btn">Empezar a chatear</button></div>`,()=>{$('mixedStartClose')?.addEventListener('click',closeGenericModal);});
+}
 
 function openGuess(targetId){
   if(state.mode!=='mixed'||!state.started||state.final||targetId===selfId)return;
@@ -507,14 +516,14 @@ function returnEveryoneToLobby(summary='Partida terminada.'){
   }
   state.lobbyMessages ||= [];
   state.lobbyMessages.push({id:uid(),system:true,text:`🏁 ${summary}`,ts:now()});
-  privateInfo=null; personaOptions=null; replyingTo=null; selectedMode=state.mode||selectedMode;
+  privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger=''; selectedMode=state.mode||selectedMode;
   const payload={state:snapshotForClient()};
   send('return-lobby',payload).catch(()=>{});
   onReturnLobby(payload);
 }
 function onReturnLobby(p){
   if(!p?.state)return;
-  state=p.state; selectedMode=state.mode||selectedMode; privateInfo=null; personaOptions=null; replyingTo=null;
+  state=p.state; selectedMode=state.mode||selectedMode; privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger='';
   closeGenericModal(); $('characterSelectModal')?.classList.add('hidden');
   enterLobby(); renderAll();
 }
