@@ -1,0 +1,55 @@
+name: Patch NEON v0.4.6
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v046.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upgrade UFO reward and frequency
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          s=s.replace('v0.4.5','v0.4.6')
+
+          old="state.ufoSpawnTimer=state.sector>=5&&Math.random()<.12?rand(.35,2.1):-1;"
+          new="state.ufoSpawnTimer=state.sector>=5&&Math.random()<.24?rand(.3,1.85):-1;"
+          if old not in s:
+              raise SystemExit('UFO spawn chance anchor not found')
+          s=s.replace(old,new,1)
+
+          old_hit="function hitUfo(s,u){let now=performance.now();if(now-u.lastHit<220)return;let dx=s.x-u.x,dy=s.y-u.y,d=Math.hypot(dx,dy)||1,rr=s.r+u.r;if(d>rr)return;u.lastHit=now;let nx=dx/d,ny=dy/d,dot=s.vx*nx+s.vy*ny;s.vx=(s.vx-2*dot*nx)*.9+u.vx*.12;s.vy=(s.vy-2*dot*ny)*.9;let sep=rr+3;s.x=u.x+nx*sep;s.y=u.y+ny*sep;state.shake=Math.max(state.shake,11);state.flash=Math.max(state.flash,.09);burst(s.x,s.y,'#72ffeb',24,270);tone(155,.08,'square',.035);tone(310,.055,'triangle',.018,.025)}"
+          new_hit="function hitUfo(s,u){let now=performance.now();if(u.dead||now-u.lastHit<220)return;let dx=s.x-u.x,dy=s.y-u.y,d=Math.hypot(dx,dy)||1,rr=s.r+u.r;if(d>rr)return;u.lastHit=now;u.dead=true;let nx=dx/d,ny=dy/d,dot=s.vx*nx+s.vy*ny;s.vx=(s.vx-2*dot*nx)*.9+u.vx*.12;s.vy=(s.vy-2*dot*ny)*.9;let sep=rr+3;s.x=u.x+nx*sep;s.y=u.y+ny*sep;for(let k=0;k<32;k++){let a=k*Math.PI/16;pulse(u.x,u.y,Math.cos(a)*245,Math.sin(a)*245,'#72ffeb',1,6)}addCredits(500,u.x,u.y);floater(u.x,u.y,'+$500','#ffe35c');state.shake=Math.max(state.shake,22);state.flash=Math.max(state.flash,.34);burst(u.x,u.y,'#72ffeb',54,390);burst(u.x,u.y,'#ffe35c',28,300);tone(92,.16,'square',.05);tone(184,.1,'sawtooth',.03,.035);tone(368,.12,'triangle',.024,.07)}"
+          if old_hit not in s:
+              raise SystemExit('hitUfo anchor not found')
+          s=s.replace(old_hit,new_hit,1)
+
+          old_filter="state.ufos=state.ufos.filter(u=>u.x>-110&&u.x<W+110)"
+          new_filter="state.ufos=state.ufos.filter(u=>!u.dead&&u.x>-110&&u.x<W+110)"
+          if old_filter not in s:
+              raise SystemExit('UFO filter anchor not found')
+          s=s.replace(old_filter,new_filter,1)
+
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('neoncr/index.html').read_text()
+          js='\n'.join(re.findall(r'<script[^>]*>(.*?)</script>',s,re.S))
+          Path('/tmp/neon-v046.js').write_text(js)
+          subprocess.run(['node','--check','/tmp/neon-v046.js'],check=True)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Make UFOs more frequent and rewarding"
+          git push
