@@ -1,0 +1,36 @@
+name: Sync A-WARE editor initial layout
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-aware-editor-layout.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync editor preset
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('a-ware/editor.html')
+          s=p.read_text(encoding='utf-8')
+          start=s.index("init=[")
+          end=s.index("];const R=", start)+1
+          new="""init=[['PC','desktop_computer.glb',1.6,-1,1.25,2.25,-.062,[0,-.062,0],[.6,.6,.6]],['ROUTER','router.glb',.5,2,1,-1.75,-.3,[0,-.3,0],[1,1,1]],['LAPTOP','Laptop.fbx',1.05,.75,1,-1.25,.047,[0,.047,0],[.6,.6,.6]],['STAIRS','stairs.glb',2.3,7.5,-4.75,1,.088,[0,.088,0],[1.7,2.1,1.2]],['DOOR','door.glb',2.6,5.2,0,-.3,-1.55,[0,-1.55,0],[1.5,1.5,1.5]],['HUMAN','Y Bot@Typing.fbx',3.15,-.25,0,1.5,-.15,[0,-.15,0],[1,1,1]],['HEATING','heating_battery.glb',1,3.75,0,-5.25,0,[-3.142,0,-3.142],[1.2,1.2,1.2]],['CEILING_FAN','ceiling_fan.glb',1,0,4.75,0,0,[0,0,0],[.5,.5,.5]],['COFFEE_TABLE','coffee_table.glb',1,1,0,-1.5,0,[0,0,0],[.8,.8,.8]],['COUCH','couch.glb',1,.5,.5,-4,0,[0,0,0],[1.6,1.6,1.6]],['PHONE','cellphone.fbx',1,-2,1.5,2.5,0,[0,0,0],[.02,.02,.02]],['TV','tv.glb',1,-3.5,.75,-1.5,1.571,[0,1.571,0],[2.2,2.2,2.2]]"""
+          s=s[:start]+new+s[end:]
+          old="for(const d of init)await add(d[1],{name:d[0],h:d[2],x:d[3],y:d[4],z:d[5],ry:d[6]});pick(null);"
+          newloop="for(const d of init){let a=await add(d[1],{name:d[0],h:d[2],x:d[3],y:d[4],z:d[5],ry:d[6]});if(d[7])a.rotation.set(...d[7]);if(d[8])a.scale.set(...d[8]);}pick(null);"
+          if old not in s: raise SystemExit('init loop target not found')
+          s=s.replace(old,newloop)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add a-ware/editor.html
+          git commit -m 'Sync A-WARE editor initial scene' || exit 0
+          git push
