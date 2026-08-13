@@ -1,0 +1,85 @@
+name: Patch NEON v0.5.1
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v051.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compact mobile cannon shop and reduce mobile base shots
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          s=s.replace('v0.5.0','v0.5.1')
+
+          # Mark current shop tab on the shop element so mobile CSS can target only CAÑÓN.
+          old="function renderShop(){ui.shopCredits.textContent=state.credits;ui.tabCannon.classList.toggle('active',state.shopTab==='cannon');"
+          new="function renderShop(){ui.shop.classList.toggle('cannonTab',state.shopTab==='cannon');ui.shop.classList.toggle('nodesTab',state.shopTab==='nodes');ui.shopCredits.textContent=state.credits;ui.tabCannon.classList.toggle('active',state.shopTab==='cannon');"
+          if old not in s: raise SystemExit('renderShop anchor not found')
+          s=s.replace(old,new,1)
+
+          # One fewer base shot on mobile only.
+          oldshots="state.shotsMax=(state.sector<7?5:state.sector<14?6:7)+state.up.shots;state.shotsLeft=state.shotsMax;"
+          newshots="state.shotsMax=Math.max(1,(state.sector<7?5:state.sector<14?6:7)+state.up.shots-(matchMedia('(max-width:700px)').matches?1:0));state.shotsLeft=state.shotsMax;"
+          if oldshots not in s: raise SystemExit('shots anchor not found')
+          s=s.replace(oldshots,newshots,1)
+
+          css='''<style id="v051-mobile-cannon-shop">
+          @media(max-width:700px){
+            #shop.cannonTab .panel{padding:9px;height:min(640px,94vh)}
+            #shop.cannonTab .shopTitleBar{margin:-9px -9px 5px;padding:5px 8px;min-height:32px}
+            #shop.cannonTab .shopTitleBar h1{font-size:13px!important}
+            #shop.cannonTab .shopTitleIcon{width:20px;height:20px}
+            #shop.cannonTab .shopWallet{margin:0 auto 5px;padding:4px 8px;width:min(250px,88%)}
+            #shop.cannonTab .walletNumber{font-size:25px}
+            #shop.cannonTab .shopTabs{height:27px;flex-basis:27px;margin:3px 0 5px;gap:5px}
+            #shop.cannonTab .shopTab{height:27px;font-size:8px}
+            #shop.cannonTab .section{margin:3px 0 2px;font-size:7px}
+            #shop.cannonTab #cannonBlock{margin-bottom:2px}
+            #shop.cannonTab .cannonUpgrade{padding:5px 8px;border-radius:11px}
+            #shop.cannonTab .cannonCompare{grid-template-columns:1fr 28px 1fr;gap:4px}
+            #shop.cannonTab .cannonThumb{height:42px}
+            #shop.cannonTab .cannonThumb svg{height:39px;width:78px}
+            #shop.cannonTab .cannonLabel{font-size:8px}
+            #shop.cannonTab .cannonArrow{font-size:20px}
+            #shop.cannonTab .cannonMeta{margin-top:2px;font-size:8px;gap:8px}
+            #shop.cannonTab .cannonCost{font-size:11px}
+            #shop.cannonTab #upgradeGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:4px!important}
+            #shop.cannonTab #upgradeGrid .card{min-height:55px!important;padding:3px 4px!important;border-radius:9px!important;grid-template-columns:28px minmax(0,1fr) auto!important;gap:0 4px!important}
+            #shop.cannonTab #upgradeGrid .upgradeIcon{width:28px!important;height:28px!important;border-radius:7px!important}
+            #shop.cannonTab #upgradeGrid .upgradeIcon svg{width:18px!important;height:18px!important}
+            #shop.cannonTab #upgradeGrid .ct{font-size:8px!important}
+            #shop.cannonTab #upgradeGrid .cc{font-size:8px!important}
+            #shop.cannonTab #upgradeGrid .cd{font-size:6.5px!important}
+            #shop.cannonTab #upgradeGrid .prog{gap:2px!important;min-height:8px!important}
+            #shop.cannonTab #upgradeGrid .pip{width:6px!important;height:6px!important}
+            #shop.cannonTab #upgradeGrid .status{font-size:5.5px!important}
+            #shop.cannonTab .foot{flex-basis:42px;padding-top:3px}
+            #shop.cannonTab .playBtn{min-width:170px;padding:8px 20px;font-size:12px}
+          }
+          </style>'''
+          s=s.replace('</head>',css+'</head>',1)
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('neoncr/index.html').read_text()
+          js='\n'.join(re.findall(r'<script[^>]*>(.*?)</script>',s,re.S))
+          Path('/tmp/neon-v051.js').write_text(js)
+          subprocess.run(['node','--check','/tmp/neon-v051.js'],check=True)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Compact mobile cannon shop and reduce mobile shots"
+          git push
