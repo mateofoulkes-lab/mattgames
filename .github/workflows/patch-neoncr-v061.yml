@@ -1,0 +1,36 @@
+name: Patch NEON v0.6.1
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v061.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply node purchase timing fix
+        run: python3 .github/scripts/patch-neon-v061.py
+      - name: Check JavaScript
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          s=pathlib.Path('neoncr/index.html').read_text()
+          m=re.search(r'<script>\(\(\)=>\{(.*)\}\)\(\);</script>',s,re.S)
+          if not m: raise SystemExit('script not found')
+          pathlib.Path('/tmp/neon.js').write_text("(()=>{"+m.group(1)+"})();")
+          PY
+          node --check /tmp/neon.js
+          grep -q "v0.6.1" neoncr/index.html
+          grep -q "unlockSector=state.sector" neoncr/index.html
+          grep -q "applyNewNodeNow" neoncr/index.html
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Fix node unlock timing and immediate adoption" || exit 0
+          git push
