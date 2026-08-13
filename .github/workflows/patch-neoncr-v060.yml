@@ -1,0 +1,36 @@
+name: Patch NEON v0.6.0
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v060.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply node progression redesign
+        run: python3 .github/scripts/patch-neon-v060.py
+      - name: Check JavaScript
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          s=pathlib.Path('neoncr/index.html').read_text()
+          m=re.search(r'<script>\(\(\)=>\{(.*)\}\)\(\);</script>',s,re.S)
+          if not m: raise SystemExit('script not found')
+          pathlib.Path('/tmp/neon.js').write_text("(()=>{"+m.group(1)+"})();")
+          PY
+          node --check /tmp/neon.js
+          grep -q "v0.6.0" neoncr/index.html
+          grep -q "GENERADOR +12" neoncr/index.html
+          grep -q "sector:75,cost:60000" neoncr/index.html
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Rebuild node progression through sector 75" || exit 0
+          git push
