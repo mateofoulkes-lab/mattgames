@@ -1,0 +1,38 @@
+name: Fix A-WARE editor loader 2
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-aware-editor-loader-2.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch editor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('a-ware/editor.html')
+          s=p.read_text(encoding='utf-8')
+          old="async function add(file,d){let a=await load(file),h=d?.h||1;norm(a,h);a.traverse(m=>{if(m.isMesh)m.material=new T.MeshNormalMaterial});let w=new T.Group;w.name=d?.name||file+'_'+n++;w.userData={file,h};w.add(a);S.add(w);if(d){w.position.set(d.x,d.y,d.z);w.rotation.y=d.ry}else w.position.y-=new T.Box3().setFromObject(w).min.y;objs.push(w);pick(w);return w}"
+          new="async function add(file,d){try{let a=await load(file),h=d?.h||1;norm(a,h);a.traverse(m=>{if(m.isMesh)m.material=new T.MeshNormalMaterial});let w=new T.Group;w.name=d?.name||file+'_'+n++;w.userData={file,h};w.add(a);S.add(w);if(d){const pos=d.position||[d.x??0,d.y??0,d.z??0],rot=d.rotation||[0,d.ry??0,0],sc=d.scale||[1,1,1];w.position.fromArray(pos);w.rotation.set(rot[0]||0,rot[1]||0,rot[2]||0);w.scale.fromArray(sc)}else w.position.y-=new T.Box3().setFromObject(w).min.y;objs.push(w);pick(w);return w}catch(err){console.error('MODEL LOAD FAILED',file,err);return null}}"
+          if old not in s: raise SystemExit('add target not found')
+          s=s.replace(old,new)
+          old2="for(const d of init){let a=await add(d[1],{name:d[0],h:d[2],x:d[3],y:d[4],z:d[5],ry:d[6]});if(d[7])a.rotation.set(...d[7]);if(d[8])a.scale.set(...d[8]);}pick(null);"
+          new2="for(const d of init){await add(d[1],{name:d[0],h:d[2],x:d[3],y:d[4],z:d[5],ry:d[6],rotation:d[7]||[0,d[6]||0,0],scale:d[8]||[1,1,1]});}pick(null);"
+          if old2 not in s: raise SystemExit('init target not found')
+          s=s.replace(old2,new2)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add a-ware/editor.html
+          git commit -m 'Fix A-WARE editor loader and preset transforms'
+          git push
