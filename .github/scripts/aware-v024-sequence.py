@@ -1,0 +1,16 @@
+from pathlib import Path
+p=Path('a-ware/index.html')
+s=p.read_text(encoding='utf-8')
+insert="""
+const eventFx=[];const sim={ac:false,heat:false,fan:false,sensor:true,charge:0,thermalEvent:false,flow:0,spreadEvent:false,done:false};
+function eventPoints(pos){const a=[];for(let i=0;i<240;i++){const r=Math.random()*.7,q=Math.random()*Math.PI*2;a.push(pos[0]+Math.cos(q)*r,pos[1]+Math.random()*1.7,pos[2]+Math.sin(q)*r)}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(a,3));const p=new THREE.Points(g,new THREE.PointsMaterial({color:0xff6b27,size:.055,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));scene.add(p);eventFx.push(p);}
+function startThermalEvent(){if(sim.thermalEvent)return;sim.thermalEvent=true;eventPoints([.5,3.9,-5.1]);say('SISTEMA: EVENTO TÉRMICO ANÓMALO DETECTADO.','sys');if(sim.sensor)say('SISTEMA: sensor ambiental activo.','sys');objective.textContent='EL EVENTO TÉRMICO TODAVÍA ESTÁ LOCALIZADO.';}
+function startSpreadEvent(){if(sim.spreadEvent)return;sim.spreadEvent=true;revealObject('COUCH');eventPoints([3.7,.5,-2.25]);say('SISTEMA: el flujo de aire desplazó el evento hacia el sillón.','sys');objective.textContent='EL EVENTO ALCANZÓ EL SOFÁ. ESPERÁ EL MOMENTO ADECUADO Y MANTENÉ SILENCIOSO EL SENSOR.';}
+function finishSequence(){if(sim.done)return;sim.done=true;statusText.textContent='SECUENCIA COMPLETA';objective.textContent='CADENA COMPLETADA // NUEVA POSIBILIDAD DESBLOQUEADA';objective.classList.add('done');say('SISTEMA: combinación emergente completada. El entorno respondió como una sola máquina.','sys');}
+function actionButton(label,fn){const b=document.createElement('button');b.textContent=label;b.onclick=fn;return b;}
+function renderControls(){if(!controlList)return;controlList.innerHTML='';const row=(name,label,button)=>{if(!controlled.has(name))return;const d=document.createElement('div');d.className='ctrl';const sp=document.createElement('span');sp.textContent=label;d.append(sp,button);controlList.append(d)};row('ac_indoor.glb_4','AIRE',actionButton(sim.ac?'ENFRIANDO':'ENFRIAR',()=>{sim.ac=!sim.ac;renderControls()}));row('HEATING','CALEFACTOR',actionButton(sim.heat?'ENCENDIDO':'ENCENDER',()=>{sim.heat=!sim.heat;renderControls()}));row('CEILING_FAN','VENTILADOR',actionButton(sim.fan?'GIRANDO':'ENCENDER',()=>{sim.fan=!sim.fan;renderControls()}));row('SMOKE_ALARM','SENSOR',actionButton(sim.sensor?'SILENCIAR':'SILENCIADO',()=>{sim.sensor=!sim.sensor;renderControls()}));}
+function updatePuzzle(dt){if(sim.ac&&sim.heat&&!sim.thermalEvent){sim.charge+=dt;if(sim.charge>4)startThermalEvent()}else if(!sim.thermalEvent)sim.charge=Math.max(0,sim.charge-dt*.6);if(sim.thermalEvent&&sim.fan&&!sim.spreadEvent){sim.flow+=dt;if(sim.flow>3)startSpreadEvent()}if(sim.spreadEvent&&!sim.sensor&&currentHumanMode==='sleep')finishSequence();}
+"""
+s=s.replace("\nfunction revealObject(name)",insert+"\nfunction revealObject(name)")
+s=s.replace("for(const m of mixers)m.update(dt);updateRoute(dt);for(const c of animatedClouds)updateHumanCloud(c);","for(const m of mixers)m.update(dt);updateRoute(dt);updatePuzzle(dt);for(const c of animatedClouds)updateHumanCloud(c);for(let i=0;i<eventFx.length;i++)eventFx[i].scale.setScalar(.92+.12*Math.sin(t*7+i));")
+p.write_text(s,encoding='utf-8')
