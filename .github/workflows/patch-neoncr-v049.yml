@@ -1,0 +1,41 @@
+name: Patch NEON v0.4.9
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v049.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add level cheat codes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          s=s.replace('v0.4.8','v0.4.9')
+          old="""let cheatBuffer='';addEventListener('keydown',e=>{if(e.ctrlKey||e.altKey||e.metaKey)return;let k=(e.key||'').toUpperCase();if(!/^[A-Z]$/.test(k))return;cheatBuffer=(cheatBuffer+k).slice(-10);if(cheatBuffer==='KLAPAUCIUS'){cheatBuffer='';addCredits(100000,W*.5,H*.22);msg('KLAPAUCIUS · +$100.000','#ffe35c',1800);state.flash=Math.max(state.flash,.35);state.shake=Math.max(state.shake,10);for(let i=0;i<5;i++)setTimeout(()=>burst(rand(W*.28,W*.72),rand(H*.18,H*.38),'#ffe35c',24,260),i*70);[523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,.12,'sine',.025,i*.05))}})"""
+          new="""let cheatBuffer='';function cheatLevelUp(n,label){ui.shop.classList.remove('show');ui.intro.classList.remove('show');state.sector=Math.max(1,state.sector+n);spawnSector();msg(label+' · SECTOR '+state.sector,'#67f8ff',1800);state.flash=Math.max(state.flash,.28);state.shake=Math.max(state.shake,8);[261.63,329.63,392,523.25].forEach((f,i)=>tone(f,.1,'sine',.022,i*.045))}addEventListener('keydown',e=>{if(e.ctrlKey||e.altKey||e.metaKey)return;let k=(e.key||'').toUpperCase();if(!/^[A-Z]$/.test(k))return;cheatBuffer=(cheatBuffer+k).slice(-11);if(cheatBuffer.endsWith('KLAPAUCIUS')){cheatBuffer='';addCredits(100000,W*.5,H*.22);msg('KLAPAUCIUS · +$100.000','#ffe35c',1800);state.flash=Math.max(state.flash,.35);state.shake=Math.max(state.shake,10);for(let i=0;i<5;i++)setTimeout(()=>burst(rand(W*.28,W*.72),rand(H*.18,H*.38),'#ffe35c',24,260),i*70);[523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,.12,'sine',.025,i*.05));return}if(cheatBuffer.endsWith('TENLEVELSUP')){cheatBuffer='';cheatLevelUp(10,'TENLEVELSUP');return}if(cheatBuffer.endsWith('ONELEVELUP')){cheatBuffer='';cheatLevelUp(1,'ONELEVELUP')}})"""
+          if old not in s:
+              raise SystemExit('cheat anchor not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('neoncr/index.html').read_text()
+          js='\n'.join(re.findall(r'<script[^>]*>(.*?)</script>',s,re.S))
+          Path('/tmp/neon-v049.js').write_text(js)
+          subprocess.run(['node','--check','/tmp/neon-v049.js'],check=True)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Add level skip cheat codes"
+          git push
