@@ -1,0 +1,27 @@
+name: Patch A-WARE v0.24
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-aware-v024.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch editor
+        run: python3 .github/scripts/aware-v024-editor.py
+      - name: Patch route
+        run: python3 .github/scripts/aware-v024-route.py
+      - name: Patch discovery
+        run: python3 .github/scripts/aware-v024-discovery.py
+      - name: Patch sequence
+        run: python3 .github/scripts/aware-v024-sequence.py
+      - name: Commit
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add a-ware/editor.html a-ware/index.html
+          git commit -m "Build A-WARE v0.24 emergent control loop" || exit 0
+          git push
