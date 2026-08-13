@@ -1,0 +1,11 @@
+from pathlib import Path
+p=Path('a-ware/editor.html')
+s=p.read_text(encoding='utf-8')
+s=s.replace("walk:'Y Bot@Standard Walk.fbx'","walk:'Y Bot@Walking.fbx'")
+s=s.replace("'heating_battery.glb','tv.glb']","'heating_battery.glb','tv.glb','smoke_alarm.glb']")
+s=s.replace("else if(file==='doorway.glb'){box(q,[.14,2.2,.18],[-.57,1.1,0]);box(q,[.14,2.2,.18],[.57,1.1,0]);box(q,[1.28,.14,.18],[0,2.13,0])}return q}","else if(file==='doorway.glb'){box(q,[.14,2.2,.18],[-.57,1.1,0]);box(q,[.14,2.2,.18],[.57,1.1,0]);box(q,[1.28,.14,.18],[0,2.13,0])}else if(file==='smoke_alarm.glb'){const m=new T.Mesh(new T.CylinderGeometry(.5,.5,.18,24),new T.MeshNormalMaterial());m.rotation.x=Math.PI/2;q.add(m)}return q}")
+s=s.replace("if(['cama.glb','mesadenoche.glb','doorway.glb'].includes(file))return procedural(file);","if(['cama.glb','mesadenoche.glb','doorway.glb','smoke_alarm.glb'].includes(file))return procedural(file);")
+s=s.replace("l.textContent=a.userData.wpName+' ['+a.userData.wpAnim+']';","l.textContent=a.userData.wpName+' ['+(a.userData.wpKind==='transit'?'TRÁNSITO':a.userData.wpAnim)+']';")
+s=s.replace("return{name:a.userData.wpName,animation:a.userData.wpAnim,file:a.userData.file,position:","return{name:a.userData.wpName,kind:a.userData.wpKind||'action',animation:a.userData.wpAnim,file:a.userData.file,position:")
+s=s.replace("const w=wps[wps.length-1];w.position.fromArray(d.position);w.rotation.set(...d.rotation);","const w=wps[wps.length-1];w.userData.wpKind=d.kind||'action';w.position.fromArray(d.position);w.rotation.set(...d.rotation);")
+p.write_text(s,encoding='utf-8')
