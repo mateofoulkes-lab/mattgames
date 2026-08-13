@@ -1,0 +1,68 @@
+name: Patch NEON v0.4.8
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-neoncr-v048.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Harden level transition reset
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('neoncr/index.html')
+          s=p.read_text()
+          s=s.replace('v0.4.7','v0.4.8')
+
+          # Add a sector generation token so delayed callbacks from an old board cannot touch the new one.
+          s=s.replace("sectorStartScore:0,up:{", "sectorStartScore:0,sectorToken:0,up:{", 1)
+
+          old_spawn="function spawnSector(){state.nodes=[];state.parts=[];state.waves=[];state.beams=[];state.trails=[];state.specials=[];state.ufos=[];state.superAwarded=false;state.levelCleared=false;state.clearCelebrating=false;state.failResetting=false;state.noteStep=0;state.lastNodeHit=0;state.ufoSpawnTimer=-1;state.sectorStartScore=state.score;"
+          new_spawn="function spawnSector(){state.sectorToken++;state.nodes=[];state.parts=[];state.waves=[];state.beams=[];state.sweeps=[];state.trails=[];state.floaters=[];state.specials=[];state.ufos=[];state.shot=null;state.shotActive=false;state.aiming=false;state.aim=null;state.aimVel=null;state.aimPower=0;state.settle=0;state.shake=0;state.flash=0;state.nitroUsed=false;state.boomUsed=false;state.superAwarded=false;state.levelCleared=false;state.clearCelebrating=false;state.failResetting=false;state.noteStep=0;state.lastNodeHit=0;state.ufoSpawnTimer=-1;state.specialSpawnTimer=-1;state.specialSpawnDone=false;ui.shotControls.classList.remove('show');ui.combo.classList.remove('show','super','failFlash');ui.msg.classList.remove('show');state.sectorStartScore=state.score;"
+          if old_spawn not in s:
+              raise SystemExit('spawnSector anchor not found')
+          s=s.replace(old_spawn,new_spawn,1)
+
+          # Guard the delayed ENLACE callback against crossing into a later sector.
+          old_link="if(n.type==='link'){let qs=state.nodes.filter(q=>q.alive).sort((a,b)=>d2(n,a)-d2(n,b)).slice(0,3);for(let q of qs){state.beams.push({x1:n.x,y1:n.y,x2:q.x,y2:q.y,color:'#fff',life:0,max:.24});setTimeout(()=>q.alive&&(isArmored(q.type)?damageArmorFromChain(q):trigger(q,.92)),55)}}"
+          new_link="if(n.type==='link'){let qs=state.nodes.filter(q=>q.alive).sort((a,b)=>d2(n,a)-d2(n,b)).slice(0,3),token=state.sectorToken;for(let q of qs){state.beams.push({x1:n.x,y1:n.y,x2:q.x,y2:q.y,color:'#fff',life:0,max:.24});setTimeout(()=>{if(token!==state.sectorToken)return;q.alive&&(isArmored(q.type)?damageArmorFromChain(q):trigger(q,.92))},55)}}"
+          if old_link not in s:
+              raise SystemExit('link callback anchor not found')
+          s=s.replace(old_link,new_link,1)
+
+          # On a successful shop exit, scrub old visual state before incrementing/spawning.
+          old_continue="ui.shop.classList.remove('show');state.chain=0;state.sector++;spawnSector();return}"
+          new_continue="ui.shop.classList.remove('show');state.chain=0;state.shot=null;state.shotActive=false;state.parts=[];state.waves=[];state.beams=[];state.sweeps=[];state.trails=[];state.floaters=[];state.specials=[];state.ufos=[];state.aiming=false;state.aim=null;state.aimVel=null;state.aimPower=0;state.settle=0;state.shake=0;state.flash=0;ui.shotControls.classList.remove('show');ui.combo.classList.remove('show','super','failFlash');state.sector++;spawnSector();return}"
+          if old_continue not in s:
+              raise SystemExit('continue success anchor not found')
+          s=s.replace(old_continue,new_continue,1)
+
+          # Keep the animation loop alive even if one frame hits an unexpected transient error.
+          old_loop="function loop(now){let dt=Math.min(.03,(now-last)/1000);last=now;acc+=dt;while(acc>=fixed){update(fixed);acc-=fixed}draw();requestAnimationFrame(loop)}"
+          new_loop="function loop(now){try{let dt=Math.min(.03,(now-last)/1000);last=now;acc+=dt;while(acc>=fixed){update(fixed);acc-=fixed}draw()}catch(err){console.error('NEON frame recovered',err);acc=0;state.shotActive=false;state.shot=null;state.parts=[];state.waves=[];state.beams=[];state.sweeps=[];state.trails=[];state.floaters=[];state.specials=[];state.ufos=[];state.aiming=false;state.aim=null;state.aimVel=null;state.aimPower=0;state.settle=0}requestAnimationFrame(loop)}"
+          if old_loop not in s:
+              raise SystemExit('loop anchor not found')
+          s=s.replace(old_loop,new_loop,1)
+
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('neoncr/index.html').read_text()
+          js='\n'.join(re.findall(r'<script[^>]*>(.*?)</script>',s,re.S))
+          Path('/tmp/neon-v048.js').write_text(js)
+          subprocess.run(['node','--check','/tmp/neon-v048.js'],check=True)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add neoncr/index.html
+          git commit -m "Fix frozen frame after completed sector"
+          git push
