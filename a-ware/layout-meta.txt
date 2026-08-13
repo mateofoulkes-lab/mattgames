@@ -1,0 +1,3 @@
+A-WARE shared layout v2
+Editor and game use layout.json.
+Waypoint transitions use Y Bot@Standard Walk.fbx.
