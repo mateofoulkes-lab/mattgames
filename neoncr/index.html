@@ -45,9 +45,56 @@
   .shotsBlock{grid-column:2;grid-row:2;min-width:0;width:220px}
   .legend{top:126px}
 }
+</style><style id="v050-mobile-hud">
+/* The old node-type dropdown is no longer part of the HUD. */
+.legend{display:none!important}
+
+/* Keep the four primary status cards visually equal. */
+.hudTop{align-items:stretch}
+.hudLeft{align-items:stretch}
+.hudLeft>.brand,.hudLeft>.creditChip,.sectorBlock,.shotsBlock{height:57px;min-height:57px;margin:0}
+.hudLeft>.brand{display:flex;flex-direction:column;justify-content:center}
+.hudLeft>.creditChip{display:flex;align-items:center;justify-content:center}
+
+@media(max-width:760px){
+  .hud{padding:8px 7px}
+  .hudTop{display:flex!important;flex-wrap:nowrap!important;align-items:stretch!important;justify-content:flex-start!important;gap:5px!important;width:100%;overflow:visible}
+  .hudLeft{display:contents!important}
+  .hudLeft>.brand,.hudLeft>.creditChip,.sectorBlock,.shotsBlock{height:56px!important;min-height:56px!important;flex:none!important}
+  .hudLeft>.brand{width:72px!important;min-width:72px!important;padding:5px 7px!important;font-size:10px!important;letter-spacing:.14em!important;align-items:flex-start!important}
+  .hudLeft>.creditChip{width:96px!important;min-width:96px!important;padding:5px 6px!important}
+  .creditNum{font-size:18px!important}
+  .creditChip .coin{width:20px;height:20px;font-size:13px}
+  .sectorBlock{width:62px!important;min-width:62px!important;padding:4px 5px!important;border-radius:10px!important}
+  .sectorBlock #sector{font-size:25px!important}
+  .shotsBlock{width:152px!important;min-width:152px!important;padding:4px 6px!important;border-radius:10px!important}
+  .shotsBlock .hudLabel{font-size:6.5px!important;letter-spacing:.11em!important;white-space:nowrap;margin-bottom:5px!important}
+  .shotDots{gap:4px!important;min-height:16px!important}
+  .shotDot{width:12px!important;height:12px!important}
+  .objectiveBlock{display:none!important}
+}
+
+@media(max-width:430px){
+  .hudTop{gap:4px!important}
+  .hudLeft>.brand{width:64px!important;min-width:64px!important;font-size:9px!important}
+  .hudLeft>.creditChip{width:88px!important;min-width:88px!important}
+  .sectorBlock{width:58px!important;min-width:58px!important}
+  .shotsBlock{width:142px!important;min-width:142px!important}
+  .shotDots{gap:3px!important}
+}
+
+@media(max-width:390px){
+  .hud{padding-left:5px;padding-right:5px}
+  .hudTop{gap:3px!important}
+  .hudLeft>.brand{width:60px!important;min-width:60px!important;padding-left:5px!important;padding-right:5px!important}
+  .hudLeft>.creditChip{width:82px!important;min-width:82px!important}
+  .sectorBlock{width:54px!important;min-width:54px!important}
+  .shotsBlock{width:137px!important;min-width:137px!important}
+  .shotDot{width:11px!important;height:11px!important}
+}
 </style></head>
 <body><canvas id="game"></canvas>
-<div class="hud"><div class="hudTop"><div class="hudLeft"><div class="chip brand brandStack"><span>NEON</span><span>BALLS</span></div><div id="creditChip" class="chip creditChip"><span class="coin">$</span><b id="credits" class="creditNum">0</b></div></div><div class="sectorBlock"><span class="hudLabel">SECTOR</span><b id="sector">1</b></div><div class="shotsBlock"><span class="hudLabel">DISPAROS RESTANTES</span><div id="shotDots" class="shotDots"></div><b id="shots" class="shotsNumber">5</b></div><div id="objChip" class="objectiveBlock"><span class="hudLabel">NODOS</span><b id="objective">0/0</b><span class="bar"><i id="objBar"></i></span></div></div><span id="score" hidden>0</span><span id="chain" hidden>0</span><div class="bottom"><div class="tip">Arrastrá desde el cañón hacia donde querés disparar. <b>Limpiá TODOS los nodos para avanzar.</b></div><div class="version">v0.4.9</div></div></div>
+<div class="hud"><div class="hudTop"><div class="hudLeft"><div class="chip brand brandStack"><span>NEON</span><span>BALLS</span></div><div id="creditChip" class="chip creditChip"><span class="coin">$</span><b id="credits" class="creditNum">0</b></div></div><div class="sectorBlock"><span class="hudLabel">SECTOR</span><b id="sector">1</b></div><div class="shotsBlock"><span class="hudLabel">DISPAROS RESTANTES</span><div id="shotDots" class="shotDots"></div><b id="shots" class="shotsNumber">5</b></div><div id="objChip" class="objectiveBlock"><span class="hudLabel">NODOS</span><b id="objective">0/0</b><span class="bar"><i id="objBar"></i></span></div></div><span id="score" hidden>0</span><span id="chain" hidden>0</span><div class="bottom"><div class="tip">Arrastrá desde el cañón hacia donde querés disparar. <b>Limpiá TODOS los nodos para avanzar.</b></div><div class="version">v0.5.0</div></div></div>
 <div id="legend" class="legend"></div><div id="shotControls" class="shotControls"><button id="nitroBtn" class="shotAction">⚡ NITRO</button><button id="boomBtn" class="shotAction boom">✹ DETONAR</button></div><div id="msg" class="msg"></div><div id="combo" class="combo"></div><div id="upgradeBurst" class="upgradeBurst"><b id="upgradeBurstText"></b></div>
 <div id="cannonMorph" class="cannonMorph"><div class="morphStage"><div id="morphTitle" class="morphTitle">EVOLUCIÓN</div><div id="morphOld" class="morphCannon morphOld"></div><div id="morphNew" class="morphCannon morphNew"></div></div></div>
 <div id="shop" class="overlay"><div class="panel"><div class="shopTitleBar"><span class="shopTitleIcon"><svg viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.2 2.2-3-3z"/></svg></span><h1 id="shopTitle">TALLER</h1></div><div id="shopWallet" class="shopWallet"><span class="coin walletCoin">$</span><b id="shopCredits" class="walletNumber">0</b></div><p id="shopSub" class="sub"></p><div class="shopTabs"><button id="tabCannon" class="shopTab active">CAÑÓN</button><button id="tabNodes" class="shopTab nodes">NODOS</button></div><div class="shopContent"><div id="cannonBlock"><div class="section">EVOLUCIÓN</div><button id="cannonUpgrade" class="cannonUpgrade"></button></div><div id="upgradeTitle" class="section">MEJORAS DE CAÑÓN</div><div id="upgradeGrid" class="grid"></div></div><div class="foot"><button id="continueBtn" class="btn playBtn">¡JUGAR!</button></div></div></div>
