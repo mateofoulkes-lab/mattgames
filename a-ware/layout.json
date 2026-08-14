@@ -1,5 +1,5 @@
 {
-  "version": "a-ware-layout-v2.1",
+  "version": "a-ware-layout-v2",
   "instances": [
     {"name":"PC","file":"desktop_computer.glb","h":1.6,"position":[-1,1.25,2.25],"rotation":[0,-0.062,0],"scale":[0.6,0.6,0.6]},
     {"name":"ROUTER","file":"router.glb","h":0.5,"position":[1.75,1,-3.25],"rotation":[3.142,0.562,-3.142],"scale":[1,1,1]},
@@ -32,9 +32,9 @@
     {"name":"durmiendo","kind":"action","animation":"sleep","file":"Y Bot@Sleeping Idle.fbx","position":[-8.75,5.75,-0.25],"rotation":[0,0,0]},
     {"name":"interactuando_tv","kind":"action","animation":"interact","file":"Y Bot@Sending Fax.fbx","position":[-2.5,0,-2],"rotation":[0,-1.309,0]},
     {"name":"usando_notebook","kind":"action","animation":"typing","file":"Y Bot@Typing.fbx","position":[3.75,0,-2],"rotation":[0,-1.571,0]},
-    {"name":"subir_escalera_inicio","kind":"transit","animation":"walk","file":"Y Bot@Walking.fbx","position":[-4.25,0,6],"rotation":[0,-1.2,0]},
+    {"name":"subir_escalera_inicio","kind":"transit","animation":"walk","file":"Y Bot@Walking.fbx","position":[3,0,6],"rotation":[0,-1.2,0]},
     {"name":"subir_escalera_fin","kind":"transit","animation":"walk","file":"Y Bot@Walking.fbx","position":[-6,4.5,6],"rotation":[0,-1.2,0]},
     {"name":"bajar_escalera_inicio","kind":"transit","animation":"walk","file":"Y Bot@Walking.fbx","position":[-6,4.5,6],"rotation":[0,1.94,0]},
-    {"name":"bajar_escalera_fin","kind":"transit","animation":"walk","file":"Y Bot@Walking.fbx","position":[-4.25,0,6],"rotation":[0,1.94,0]}
+    {"name":"bajar_escalera_fin","kind":"transit","animation":"walk","file":"Y Bot@Walking.fbx","position":[3,0,6],"rotation":[0,1.94,0]}
   ]
 }
