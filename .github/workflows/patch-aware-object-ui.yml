@@ -1,0 +1,32 @@
+name: Patch A-WARE object UI
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-aware-object-ui.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .github/scripts/patch-aware-object-ui-html.py
+      - run: python3 .github/scripts/patch-aware-object-ui-js.py
+      - name: Validate module syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('a-ware/index.html').read_text()
+          m=re.findall(r'<script type="module">(.*?)</script>',s,re.S)
+          if not m: raise SystemExit('module script missing')
+          Path('/tmp/aware.mjs').write_text(m[-1])
+          PY
+          node --check /tmp/aware.mjs
+      - name: Commit
+        run: |
+          git config user.name "mateofoulkes-lab"
+          git config user.email "mateofoulkes@gmail.com"
+          git add a-ware/index.html a-ware/layout.json
+          git commit -m "Add A-WARE object hover interactions" || exit 0
+          git push
