@@ -1,0 +1,12 @@
+name: AWARE idle fix
+on: push
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .github/scripts/fix-aware-idle1.py
+      - run: python3 .github/scripts/fix-aware-idle2.py
+      - run: git config user.name mateofoulkes-lab && git config user.email mateofoulkes@gmail.com && git add a-ware/index.html && git commit -m 'Use idle as base animation' && git push
