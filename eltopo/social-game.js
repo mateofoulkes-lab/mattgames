@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.11';
+import { AVATARS } from './game-data.js?v=0.10.12';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.11';
+const VERSION = '0.10.12';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -266,6 +266,7 @@ function handleEnvelope(peerId,data){
     case 'spy-question': return onSpyQuestion(data.payload,cid);
     case 'spy-turn': return onSpyTurn(data.payload);
     case 'spy-final-phase': return onSpyFinalPhase(data.payload);
+    case 'spy-final-ready': return onSpyFinalReady(data.payload,cid);
     case 'spy-voting': return onSpyVoting(data.payload);
     case 'spy-location-window': return onSpyLocationWindow(data.payload);
     case 'spy-location-ack': return onSpyLocationAck(data.payload);
@@ -869,19 +870,38 @@ function onSpyQuestion(p,cid){
 }
 function onSpyTurn(p){ if(state.mode!=='spyfall'||state.final)return; state.spyfall.turnOrder=p?.turnOrder||state.spyfall.turnOrder||[]; state.spyfall.turnIndex=Number(p?.turnIndex||0); renderGameBar(); }
 function pushSpyFinalPhaseToEveryPlayer(deadline){
-  const payload={active:true,deadline};
+  const payload={active:true,deadline,locationOptions:state.spyfall?.locationOptions||[]};
   const snapshot={state:snapshotForClient()};
+  // Every pulse goes both room-wide and directly to each logical player.
+  send('spy-final-phase',payload).catch(()=>{});
   for(const id of activePlayerIds()){
     if(id===selfId){
       onSpyFinalPhase(payload);
       continue;
     }
-    send('spy-final-phase',payload,id).catch(()=>send('spy-final-phase',payload).catch(()=>{}));
-    // The spy keeps private role/UI state locally. A public snapshot immediately
-    // after opening the chooser can overwrite that transient state on mobile.
+    send('spy-final-phase',payload,id).catch(()=>{});
     if(id!==state._spyId)send('snapshot',snapshot,id).catch(()=>{});
   }
 }
+
+function onSpyFinalReady(p,cid){
+  if(!isAdmin||state.mode!=='spyfall'||state.final||state.phase!=='spy-voting'||!state.spyfall?.voting||!cid)return;
+  const m=state.members[cid]; if(!m||m.online===false||m.spectator)return;
+  state.spyfall.ready ||= {};
+  state.spyfall.ready[cid]={at:now(),role:p?.role==='spy'?'spy':'crew'};
+}
+
+function acknowledgeSpyFinalChoice(role){
+  if(state.mode!=='spyfall'||state.phase!=='spy-voting'||!state.spyfall?.voting)return;
+  if(isAdmin){
+    state.spyfall.ready ||= {};
+    state.spyfall.ready[selfId]={at:now(),role};
+  }else if(state.adminId){
+    send('spy-final-ready',{role},state.adminId).catch(()=>send('spy-final-ready',{role}).catch(()=>{}));
+  }
+}
+
+
 
 function beginSpyFinalVoting(){
   if(!isAdmin||state.mode!=='spyfall'||state.final||state.spyfall?.voting)return;
@@ -890,6 +910,9 @@ function beginSpyFinalVoting(){
   state.spyfall.voting=true;
   state.spyfall.deadline=deadline;
   state.spyfall.votes={};
+  state.spyfall.ready={};
+  const canonicalLocations=[...new Set([...SP_LOCATIONS.map(l=>l.name),state._spyLocation].filter(Boolean))];
+  state.spyfall.locationOptions=shuffle(canonicalLocations);
   state.spyfall.locationWindow=false;
   state.spyfall.spyGuessSubmitted=false;
   state.spyfall.spyLocationGuess=null;
@@ -908,7 +931,7 @@ function beginSpyFinalVoting(){
     }
     pushSpyFinalPhaseToEveryPlayer(deadline);
     broadcastRoster();
-  },1000);
+  },650);
 
   clearTimeout(spyFinalizeTimer);
   spyFinalizeTimer=setTimeout(finalizeSpyfall,20050);
@@ -956,6 +979,7 @@ function openSpyVoteModal(){
   });
   modal.classList.remove('hidden');
   updateSpyFinalChoiceCountdown();
+  acknowledgeSpyFinalChoice('crew');
 }
 function openSpyLocationVoteModal(){
   if(!privateInfo?.isSpy||state.final||state.phase!=='spy-voting'||!state.spyfall?.voting||now()>=Number(state.spyfall.deadline||0))return;
@@ -966,10 +990,12 @@ function openSpyLocationVoteModal(){
   $('characterSelectTitle').textContent='🕵️ ¿Dónde están?';
   const chosen=state.spyfall?.spyLocationGuess||state.spyfall?.spyLocationPending||null;
   grid.classList.add('spy-final-choice-grid','spy-location-grid');
-  grid.innerHTML=SPY_LOCATIONS.map(l=>`<button class="spy-location-vote ${chosen===l.name?'selected':''}" data-spy-final-location="${esc(l.name)}" ${state.spyfall?.spyGuessSubmitted?'disabled':''}><span>📍</span><strong>${esc(l.name)}</strong></button>`).join('');
+  const options=(Array.isArray(state.spyfall?.locationOptions)&&state.spyfall.locationOptions.length?state.spyfall.locationOptions:SPY_LOCATIONS.map(l=>l.name));
+  grid.innerHTML=options.map(name=>`<button class="spy-location-vote ${chosen===name?'selected':''}" data-spy-final-location="${esc(name)}" ${state.spyfall?.spyGuessSubmitted?'disabled':''}><span>📍</span><strong>${esc(name)}</strong></button>`).join('');
   grid.querySelectorAll('[data-spy-final-location]').forEach(b=>b.onclick=()=>castSpyLocationVote(b.dataset.spyFinalLocation));
   modal.classList.remove('hidden');
   updateSpyFinalChoiceCountdown();
+  acknowledgeSpyFinalChoice('spy');
 }
 function castSpyLocationVote(location){
   if(!spyLocationWindowOpen())return;
@@ -995,9 +1021,11 @@ function castSpyLocationVote(location){
 function onSpyFinalPhase(p){
   if(!p?.active||state.mode!=='spyfall'||state.final)return;
   const alreadyVoting=state.phase==='spy-voting'&&state.spyfall?.voting;
+  state.started=true;
   state.phase='spy-voting';
   state.spyfall.voting=true;
   state.spyfall.deadline=Number(p.deadline)||now()+20000;
+  if(Array.isArray(p.locationOptions)&&p.locationOptions.length)state.spyfall.locationOptions=[...new Set(p.locationOptions.map(String))];
   // The host repeats this phase every second for reliability. Do NOT reset the
   // spy's private choice every time a repeated phase packet arrives.
   if(!alreadyVoting){
