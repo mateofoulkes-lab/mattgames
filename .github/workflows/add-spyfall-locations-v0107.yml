@@ -1,0 +1,25 @@
+name: Add Spyfall locations v0.10.7
+on:
+  push:
+    paths:
+      - 'eltopo/tools/add_spyfall_locations_v0107.py'
+      - '.github/workflows/add-spyfall-locations-v0107.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python eltopo/tools/add_spyfall_locations_v0107.py
+      - run: node --check eltopo/social-game.js && node --check eltopo/mixed-avatar-sync.js
+      - run: rm -f eltopo/tools/add_spyfall_locations_v0107.py .github/workflows/add-spyfall-locations-v0107.yml
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add eltopo/social-game.js eltopo/index.html eltopo/mixed-avatar-sync.js eltopo/tools/add_spyfall_locations_v0107.py .github/workflows/add-spyfall-locations-v0107.yml || true
+          git diff --cached --quiet || git commit -m 'Add twenty new Spyfall locations'
+          git push
