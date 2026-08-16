@@ -1,0 +1,148 @@
+name: Fix El Topo v0.10.12 Spyfall final reliability
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-v01012-spyfall-final.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Patch Spyfall final voting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('eltopo/social-game.js')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("./game-data.js?v=0.10.11","./game-data.js?v=0.10.12")
+          s=s.replace("const VERSION = '0.10.11';","const VERSION = '0.10.12';")
+
+          old="""    case 'spy-final-phase': return onSpyFinalPhase(data.payload);
+    case 'spy-voting': return onSpyVoting(data.payload);"""
+          new="""    case 'spy-final-phase': return onSpyFinalPhase(data.payload);
+    case 'spy-final-ready': return onSpyFinalReady(data.payload,cid);
+    case 'spy-voting': return onSpyVoting(data.payload);"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old="""  state.spyfall.voting=true;
+  state.spyfall.deadline=deadline;
+  state.spyfall.votes={};
+  state.spyfall.locationWindow=false;"""
+          new="""  state.spyfall.voting=true;
+  state.spyfall.deadline=deadline;
+  state.spyfall.votes={};
+  state.spyfall.ready={};
+  const canonicalLocations=[...new Set([...SPY_LOCATIONS.map(l=>l.name),state._spyLocation].filter(Boolean))];
+  state.spyfall.locationOptions=shuffle(canonicalLocations);
+  state.spyfall.locationWindow=false;"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          start=s.index('function pushSpyFinalPhaseToEveryPlayer(deadline){')
+          end=s.index('\n\nfunction beginSpyFinalVoting()',start)
+          assert start!=-1 and end!=-1
+          newfunc="""function pushSpyFinalPhaseToEveryPlayer(deadline){
+  const payload={active:true,deadline,locationOptions:state.spyfall?.locationOptions||[]};
+  const snapshot={state:snapshotForClient()};
+  // Belt and suspenders: broadcast every pulse AND target each player individually.
+  // An ACK is only recorded after that client's chooser is actually visible.
+  send('spy-final-phase',payload).catch(()=>{});
+  for(const id of activePlayerIds()){
+    if(id===selfId){
+      onSpyFinalPhase(payload);
+      continue;
+    }
+    send('spy-final-phase',payload,id).catch(()=>{});
+    if(id!==state._spyId)send('snapshot',snapshot,id).catch(()=>{});
+  }
+}
+
+function onSpyFinalReady(p,cid){
+  if(!isAdmin||state.mode!=='spyfall'||state.final||state.phase!=='spy-voting'||!state.spyfall?.voting||!cid)return;
+  const m=state.members[cid]; if(!m||m.online===false||m.spectator)return;
+  state.spyfall.ready ||= {};
+  state.spyfall.ready[cid]={at:now(),role:p?.role==='spy'?'spy':'crew'};
+}
+
+function acknowledgeSpyFinalChoice(role){
+  if(state.mode!=='spyfall'||state.phase!=='spy-voting'||!state.spyfall?.voting)return;
+  if(isAdmin){
+    state.spyfall.ready ||= {};
+    state.spyfall.ready[selfId]={at:now(),role};
+  }else if(state.adminId){
+    send('spy-final-ready',{role},state.adminId).catch(()=>send('spy-final-ready',{role}).catch(()=>{}));
+  }
+}
+"""
+          s=s[:start]+newfunc+s[end:]
+
+          old="""  grid.innerHTML=SPY_LOCATIONS.map(l=>`<button class=\"spy-location-vote ${chosen===l.name?'selected':''}\" data-spy-final-location=\"${esc(l.name)}\" ${state.spyfall?.spyGuessSubmitted?'disabled':''}><span>📍</span><strong>${esc(l.name)}</strong></button>`).join('');"""
+          new="""  const options=(Array.isArray(state.spyfall?.locationOptions)&&state.spyfall.locationOptions.length?state.spyfall.locationOptions:SPY_LOCATIONS.map(l=>l.name));
+  grid.innerHTML=options.map(name=>`<button class=\"spy-location-vote ${chosen===name?'selected':''}\" data-spy-final-location=\"${esc(name)}\" ${state.spyfall?.spyGuessSubmitted?'disabled':''}><span>📍</span><strong>${esc(name)}</strong></button>`).join('');"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old="""  modal.classList.remove('hidden');
+  updateSpyFinalChoiceCountdown();
+}
+function openSpyLocationVoteModal(){"""
+          new="""  modal.classList.remove('hidden');
+  updateSpyFinalChoiceCountdown();
+  acknowledgeSpyFinalChoice('crew');
+}
+function openSpyLocationVoteModal(){"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old="""  modal.classList.remove('hidden');
+  updateSpyFinalChoiceCountdown();
+}
+function castSpyLocationVote(location){"""
+          new="""  modal.classList.remove('hidden');
+  updateSpyFinalChoiceCountdown();
+  acknowledgeSpyFinalChoice('spy');
+}
+function castSpyLocationVote(location){"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old="""  state.phase='spy-voting';
+  state.spyfall.voting=true;
+  state.spyfall.deadline=Number(p.deadline)||now()+20000;"""
+          new="""  state.started=true;
+  state.phase='spy-voting';
+  state.spyfall.voting=true;
+  state.spyfall.deadline=Number(p.deadline)||now()+20000;
+  if(Array.isArray(p.locationOptions)&&p.locationOptions.length)state.spyfall.locationOptions=[...new Set(p.locationOptions.map(String))];"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          # Pulse more frequently so a transient mobile loss has multiple chances.
+          s=s.replace('  },1000);\n\n  clearTimeout(spyFinalizeTimer);','  },650);\n\n  clearTimeout(spyFinalizeTimer);',1)
+
+          p.write_text(s,encoding='utf-8')
+
+          h=Path('eltopo/index.html')
+          x=h.read_text(encoding='utf-8').replace('v0.10.11','v0.10.12')
+          h.write_text(x,encoding='utf-8')
+          m=Path('eltopo/mixed-avatar-sync.js')
+          x=m.read_text(encoding='utf-8').replace("const BUILD_VERSION = '0.10.11';","const BUILD_VERSION = '0.10.12';")
+          m.write_text(x,encoding='utf-8')
+          PY
+      - name: Validate JavaScript
+        run: node --check eltopo/social-game.js && node --check eltopo/mixed-avatar-sync.js
+      - name: Remove one-off workflow
+        run: rm -f .github/workflows/fix-v01012-spyfall-final.yml
+      - name: Commit v0.10.12
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Make Spyfall final voting acknowledged and canonical' || exit 0
+          git push
