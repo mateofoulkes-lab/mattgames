@@ -1,0 +1,34 @@
+name: Apply El Topo v0.10.8
+
+on:
+  push:
+    paths:
+      - 'eltopo/tools/patch_v0108.py'
+      - '.github/workflows/apply-v0108.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply Spyfall forced voting modals
+        run: python eltopo/tools/patch_v0108.py
+      - name: Validate JavaScript
+        run: |
+          node --check eltopo/social-game.js
+          node --check eltopo/mixed-avatar-sync.js
+      - name: Remove one-off patch files
+        run: rm -f eltopo/tools/patch_v0108.py .github/workflows/apply-v0108.yml
+      - name: Commit v0.10.8
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix Spyfall forced final voting modals'
+          git push
