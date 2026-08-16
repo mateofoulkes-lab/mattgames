@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.10';
+import { AVATARS } from './game-data.js?v=0.10.11';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.10';
+const VERSION = '0.10.11';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -877,7 +877,9 @@ function pushSpyFinalPhaseToEveryPlayer(deadline){
       continue;
     }
     send('spy-final-phase',payload,id).catch(()=>send('spy-final-phase',payload).catch(()=>{}));
-    send('snapshot',snapshot,id).catch(()=>{});
+    // The spy keeps private role/UI state locally. A public snapshot immediately
+    // after opening the chooser can overwrite that transient state on mobile.
+    if(id!==state._spyId)send('snapshot',snapshot,id).catch(()=>{});
   }
 }
 
@@ -956,7 +958,7 @@ function openSpyVoteModal(){
   updateSpyFinalChoiceCountdown();
 }
 function openSpyLocationVoteModal(){
-  if(!privateInfo?.isSpy||state.final||!state.spyfall?.locationWindow||now()>=Number(state.spyfall.deadline||0))return;
+  if(!privateInfo?.isSpy||state.final||state.phase!=='spy-voting'||!state.spyfall?.voting||now()>=Number(state.spyfall.deadline||0))return;
   closeGenericModal();
   const modal=$('characterSelectModal'),grid=$('characterSelectGrid');
   if(!modal||!grid)return;
@@ -992,21 +994,32 @@ function castSpyLocationVote(location){
 }
 function onSpyFinalPhase(p){
   if(!p?.active||state.mode!=='spyfall'||state.final)return;
+  const alreadyVoting=state.phase==='spy-voting'&&state.spyfall?.voting;
   state.phase='spy-voting';
   state.spyfall.voting=true;
   state.spyfall.deadline=Number(p.deadline)||now()+20000;
-  state.spyfall.spyGuessSubmitted=false;
-  state.spyfall.spyLocationGuess=null;
-  delete state.spyfall.spyLocationPending;
+  // The host repeats this phase every second for reliability. Do NOT reset the
+  // spy's private choice every time a repeated phase packet arrives.
+  if(!alreadyVoting){
+    state.spyfall.spyGuessSubmitted=false;
+    state.spyfall.spyLocationGuess=null;
+    delete state.spyfall.spyLocationPending;
+  }
   state.spyfall.locationWindow=!!privateInfo?.isSpy;
   clearInterval(spyCountdownTicker);
   spyCountdownTicker=setInterval(()=>{
     renderGameBar();
     updateSpyFinalChoiceCountdown();
+    // Watchdog: while the spy is inside the final window the location chooser
+    // must stay open, even if a mobile browser redraws or a sync packet lands.
+    if(privateInfo?.isSpy)ensureSpyFinalChoiceUI();
     if(now()>=state.spyfall.deadline)clearInterval(spyCountdownTicker);
   },200);
   renderGameBar();
-  setTimeout(ensureSpyFinalChoiceUI,0);
+  if(privateInfo?.isSpy){
+    state.spyfall.locationWindow=true;
+    openSpyLocationVoteModal();
+  }else setTimeout(ensureSpyFinalChoiceUI,0);
 }
 function ensureSpyFinalChoiceUI(){
   if(state.mode!=='spyfall'||!state.started||state.final||state.phase!=='spy-voting'||!state.spyfall?.voting)return;

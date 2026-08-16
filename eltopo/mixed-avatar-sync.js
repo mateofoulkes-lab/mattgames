@@ -3,7 +3,7 @@
 // Once identities are shuffled, every visible avatar follows the public/impersonated name,
 // so the original profile photo cannot reveal who is really behind an account.
 
-const BUILD_VERSION = '0.10.10';
+const BUILD_VERSION = '0.10.11';
 const realAvatarByName = new Map();
 let applying = false;
 
