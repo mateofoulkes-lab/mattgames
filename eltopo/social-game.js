@@ -2,7 +2,7 @@ import { AVATARS } from './game-data.js?v=0.10.12';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.12';
+const VERSION = '0.10.13';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -911,7 +911,7 @@ function beginSpyFinalVoting(){
   state.spyfall.deadline=deadline;
   state.spyfall.votes={};
   state.spyfall.ready={};
-  const canonicalLocations=[...new Set([...SP_LOCATIONS.map(l=>l.name),state._spyLocation].filter(Boolean))];
+  const canonicalLocations=[...new Set([...SPY_LOCATIONS.map(l=>l.name),state._spyLocation].filter(Boolean))];
   state.spyfall.locationOptions=shuffle(canonicalLocations);
   state.spyfall.locationWindow=false;
   state.spyfall.spyGuessSubmitted=false;
