@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.5';
+import { AVATARS } from './game-data.js?v=0.10.6';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.5';
+const VERSION = '0.10.6';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -807,7 +807,7 @@ function onSpyQuestion(p,cid){
 function onSpyTurn(p){ if(state.mode!=='spyfall'||state.final)return; state.spyfall.turnOrder=p?.turnOrder||state.spyfall.turnOrder||[]; state.spyfall.turnIndex=Number(p?.turnIndex||0); renderGameBar(); }
 function beginSpyFinalVoting(){
   if(!isAdmin||state.mode!=='spyfall'||state.final||state.spyfall?.voting)return;
-  const deadline=now()+10000;
+  const deadline=now()+20000;
   state.phase='spy-voting';
   state.spyfall.voting=true;
   state.spyfall.deadline=deadline;
@@ -829,14 +829,14 @@ function beginSpyFinalVoting(){
     }
   }
   clearTimeout(spyFinalizeTimer);
-  spyFinalizeTimer=setTimeout(finalizeSpyfall,10050);
+  spyFinalizeTimer=setTimeout(finalizeSpyfall,20050);
   renderGameBar();
 }
 function onSpyVoting(p){
   if(privateInfo?.isSpy||!p?.voting||state.final)return;
   state.phase='spy-voting';
   state.spyfall.voting=true;
-  state.spyfall.deadline=Number(p.deadline)||now()+10000;
+  state.spyfall.deadline=Number(p.deadline)||now()+20000;
   clearInterval(spyCountdownTicker);
   spyCountdownTicker=setInterval(()=>{
     renderGameBar();
@@ -847,7 +847,7 @@ function onSpyVoting(p){
 function onSpyLocationWindow(p){
   if(!privateInfo?.isSpy||!p?.active||state.final)return;
   state.spyfall.locationWindow=true;
-  state.spyfall.deadline=Number(p.deadline)||now()+10000;
+  state.spyfall.deadline=Number(p.deadline)||now()+20000;
   state.spyfall.spyGuessSubmitted=false;
   state.spyfall.spyLocationGuess=null;
   clearInterval(spyCountdownTicker);
@@ -907,15 +907,18 @@ function onSpyFinal(p){
   renderAll(); showSpyResult(p);
 }
 function showSpyResult(p){
-  const crewWon=p.winner==='crew'; const winner=crewWon?'🏆 GANA EL GRUPO':'🕵️ GANA EL ESPÍA';
+  const crewWon=p.winner==='crew';
+  const winner=crewWon?'🏆 GANA EL GRUPO':'🕵️ GANA EL ESPÍA';
+  const spyMember=state.members[p.spyId]||{realName:p.spyName,publicName:p.spyName};
   const tally=(p.tally||[]).length?(p.tally||[]).map(x=>`<span class="result-vote-chip">${esc(x.name)} ×${x.count}</span>`).join(''):'<span class="result-no-votes">Sin votos válidos</span>';
   const majority=p.reason==='vote'&&Number.isFinite(Number(p.eligibleVoters))
-    ? `<div class="spy-final-detail"><span>Votos al espía</span><b>${Number(p.spyVotes||0)} / ${Number(p.eligibleVoters||0)}</b><span>Mayoría necesaria</span><b>${Number(p.needed||0)}</b></div>`:'';
-  const guess=p.spyGuess?`<div class="spy-final-detail"><span>El espía eligió</span><b>${esc(p.spyGuess)}</b></div>`:'';
-  const action=isAdmin?'<button id="spyReturnLobby" class="primary-btn">Cerrar resultado y volver al lobby</button>':'<button id="spyResultClose" class="primary-btn">Cerrar resultado</button>';
-  showModal('🎉 Resultado · Spyfall',`<div class="spy-final-card"><div class="spy-final-winner">${winner}</div><strong>${esc(p.result||'Partida terminada')}</strong><div class="spy-final-detail"><span>El espía era</span><b>${esc(p.spyName||'?')}</b><span>El lugar era</span><b>${esc(p.location||'?')}</b></div>${majority}${guess}${p.reason==='vote'?`<div class="spy-final-tally"><span>VOTACIÓN FINAL</span>${tally}</div>`:''}${action}</div>`,()=>{
-    $('spyResultClose')?.addEventListener('click',closeGenericModal);
-    $('spyReturnLobby')?.addEventListener('click',()=>returnEveryoneToLobby(`Spyfall: ${p.result}`));
+    ? `<div class="spy-final-stat"><span>VOTOS AL ESPÍA</span><strong>${Number(p.spyVotes||0)} / ${Number(p.eligibleVoters||0)}</strong><small>se necesitaban ${Number(p.needed||0)}</small></div>`:'';
+  const guess=p.spyGuess?`<div class="spy-final-stat"><span>ELECCIÓN DEL ESPÍA</span><strong>${esc(p.spyGuess)}</strong><small>${p.reason==='guess'?'¡acertó el lugar!':'su intento durante el cierre'}</small></div>`:'';
+  const action=isAdmin?'<button id="spyReturnLobby" class="primary-btn spy-final-close">Volver al lobby</button>':'<button id="spyResultClose" class="primary-btn spy-final-close">Cerrar resultado</button>';
+  showModal('',`<div class="spy-final-show"><div class="spy-final-burst">${crewWon?'🎉🏆🎉':'🕵️✨🕵️'}</div><div class="spy-final-overline">SPYFALL · RONDA TERMINADA</div><div class="spy-final-winner-big">${winner}</div><div class="spy-final-reveal"><span>EL ESPÍA ERA</span><div class="spy-final-avatar">${avatarMarkup(spyMember)}</div><strong>${esc(p.spyName||'?')}</strong></div><div class="spy-final-location"><span>EL LUGAR ERA</span><strong>📍 ${esc(p.location||'?')}</strong></div><p class="spy-final-summary">${esc(p.result||'Partida terminada')}</p><div class="spy-final-stats">${majority}${guess}</div>${p.reason==='vote'?`<div class="spy-final-tally"><span>VOTACIÓN FINAL</span><div>${tally}</div></div>`:''}${action}</div>`,modal=>{
+    modal.classList.add('spy-result-modal');
+    $('spyResultClose')?.addEventListener('click',()=>{modal.classList.remove('spy-result-modal');closeGenericModal();});
+    $('spyReturnLobby')?.addEventListener('click',()=>{modal.classList.remove('spy-result-modal');returnEveryoneToLobby(`Spyfall: ${p.result}`);});
   });
 }
 function guessSpyLocation(){
@@ -1201,12 +1204,12 @@ function renderGameBar(){
     const turnId=currentSpyTurnId(),turn=state.members[turnId];
     if(privateInfo?.isSpy&&state.spyfall?.locationWindow){
       const left=Math.max(0,Math.ceil((Number(state.spyfall.deadline||0)-now())/1000));
-      html+=`<div class="mixed-countdown"><span>Tenés 10 segundos para elegir en qué lugar están.</span><strong>${left}</strong></div>`;
+      html+=`<div class="mixed-countdown"><span>Tenés 20 segundos para elegir en qué lugar están.</span><strong>${left}</strong></div>`;
       if(state.spyfall.spyGuessSubmitted)html+=`<div class="game-help">Elegiste “${esc(state.spyfall.spyLocationGuess||'—')}”. Esperá el resultado.</div>`;
       else html+=`<button id="spyGuessBtn" class="banner-btn">Elegir lugar</button>`;
     }else if(state.spyfall?.voting&&!privateInfo?.isSpy){
       const left=Math.max(0,Math.ceil((Number(state.spyfall.deadline||0)-now())/1000));
-      html+=`<div class="mixed-countdown"><span>Votación final. Tenés 10 segundos para votar o cambiar tu voto.</span><strong>${left}</strong></div><div class="game-help">Tocá el nombre de quien creés que es el espía. El voto es privado.</div>`;
+      html+=`<div class="mixed-countdown"><span>Votación final. Tenés 20 segundos para votar o cambiar tu voto.</span><strong>${left}</strong></div><div class="game-help">Tocá el nombre de quien creés que es el espía. El voto es privado.</div>`;
     }else{
       html+=`<div class="spy-turn-banner"><span>ES EL TURNO DE</span><strong>${esc(turn?displayName(turn):'—')}</strong><small>para hacer una pregunta</small></div>`;
       if(turnId===selfId)html+=`<button id="askSpyQuestionBtn" class="banner-btn">Elegir a quién preguntar</button>`;
@@ -1270,7 +1273,7 @@ function showPrivateCard(){
   }
   if(state.mode==='spyfall'){
     const canGuess=spyLocationWindowOpen();
-    const html=privateInfo?.isSpy?`<div class="private-character spy"><div class="secret-emoji">🕵️</div><h2>SOS EL ESPÍA</h2><p>No conocés el lugar. Hacé preguntas, mezclate y tratá de deducirlo.</p>${canGuess?'<button id="spyGuessInside" class="primary-btn">Elegir lugar ahora</button>':'<small>Cuando empiece la votación final vas a tener 10 segundos para elegir el lugar.</small>'}</div>`:`<div class="private-character"><div class="secret-emoji">📍</div><span>Ubicación</span><h2>${esc(privateInfo?.location||'—')}</h2><span>Tu rol</span><strong>${esc(privateInfo?.role||'—')}</strong><p>Respondé sin decir el lugar de forma demasiado obvia.</p></div>`;
+    const html=privateInfo?.isSpy?`<div class="private-character spy"><div class="secret-emoji">🕵️</div><h2>SOS EL ESPÍA</h2><p>No conocés el lugar. Hacé preguntas, mezclate y tratá de deducirlo.</p>${canGuess?'<button id="spyGuessInside" class="primary-btn">Elegir lugar ahora</button>':'<small>Cuando empiece la votación final vas a tener 20 segundos para elegir el lugar.</small>'}</div>`:`<div class="private-character"><div class="secret-emoji">📍</div><span>Ubicación</span><h2>${esc(privateInfo?.location||'—')}</h2><span>Tu rol</span><strong>${esc(privateInfo?.role||'—')}</strong><p>Respondé sin decir el lugar de forma demasiado obvia.</p></div>`;
     showModal('Tu información secreta',html,()=>{$('spyGuessInside')?.addEventListener('click',()=>{closeGenericModal();guessSpyLocation();});});
   }
 }
@@ -1283,7 +1286,7 @@ function backToLobby(){
   if(!state.started){enterLobby();renderAll();return;}
   if(!confirm('¿Volver al lobby? La partida actual terminará para todos.'))return;
   if(isAdmin)returnEveryoneToLobby('La partida volvió al lobby.');
-  else send('return-lobby-request',{},state.adminId).then(()=>toast('Volviendo al lobby…')).catch(()=>toast('No pude volver al lobby.'));
+  else send('return-lobby-request',{}).then(()=>toast('Volviendo al lobby…')).catch(()=>toast('No pude volver al lobby.'));
 }
 function onReturnLobbyRequest(p,cid){
   if(!isAdmin||!state.started||!state.members[cid]||state.members[cid].online===false)return;
