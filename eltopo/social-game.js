@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.12';
+import { AVATARS } from './game-data.js?v=0.10.14';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.13';
+const VERSION = '0.10.14';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
