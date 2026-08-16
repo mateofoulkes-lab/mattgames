@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.9';
+import { AVATARS } from './game-data.js?v=0.10.10';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.9';
+const VERSION = '0.10.10';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -120,6 +120,9 @@ let mixedCountdownTicker = null;
 let spyFinalizeTimer = null;
 let spyCountdownTicker = null;
 let spyPhaseSyncTicker = null;
+let spyBag = [];
+let spyBagRosterKey = '';
+let lastSpyId = null;
 let incognitoFinalizeTimer = null;
 let incognitoCountdownTicker = null;
 const peerLeaveTimers = new Map();
@@ -789,12 +792,38 @@ function showIncognitoResults(){
 function revealIncognito(){ finalizeIncognito(); }
 function showIncognitoReveal(){ showIncognitoResults(); }
 
+function chooseNextSpy(ids){
+  const eligible=[...new Set(ids)].filter(id=>state.members[id]&&state.members[id].online!==false&&!state.members[id].spectator);
+  if(!eligible.length)return null;
+  if(state.adminForcedSpyId&&eligible.includes(state.adminForcedSpyId)){
+    const forced=state.adminForcedSpyId; state.adminForcedSpyId=null; lastSpyId=forced;
+    spyBag=spyBag.filter(id=>id!==forced);
+    return forced;
+  }
+  state.adminForcedSpyId=null;
+  const rosterKey=[...eligible].sort().join('|');
+  if(rosterKey!==spyBagRosterKey){
+    spyBagRosterKey=rosterKey;
+    spyBag=shuffle([...eligible]);
+  }else{
+    spyBag=spyBag.filter(id=>eligible.includes(id));
+    if(!spyBag.length)spyBag=shuffle([...eligible]);
+  }
+  if(spyBag.length>1&&spyBag[0]===lastSpyId){
+    const swap=1+Math.floor(Math.random()*(spyBag.length-1));
+    [spyBag[0],spyBag[swap]]=[spyBag[swap],spyBag[0]];
+  }
+  const spyId=spyBag.shift();
+  lastSpyId=spyId;
+  return spyId;
+}
+
 function startSpyfall(ids){
   clearInterval(spyPhaseSyncTicker);
   state.started=true; state.phase='playing'; state.mode='spyfall'; state.final=false;
   state.spyfall={votes:{},result:null,voting:false,deadline:0,turnOrder:shuffle(ids),turnIndex:0,locationWindow:false,spyGuessSubmitted:false,spyLocationGuess:null,spyLocationCorrect:false};
   state.trigger='Pregunten por turnos. Todos conocen el lugar excepto el espía.'; state.messages=[]; replyingTo=null; enterMessenger();
-  const location=pick(SPY_LOCATIONS); const spyId=state.adminForcedSpyId&&ids.includes(state.adminForcedSpyId)?state.adminForcedSpyId:pick(ids); state.adminForcedSpyId=null; const roles=shuffle(location.roles);
+  const location=pick(SPY_LOCATIONS); const spyId=chooseNextSpy(ids); if(!spyId){toast('No hay jugadores válidos para Spyfall.');return;} const roles=shuffle(location.roles);
   ids.forEach((id,i)=>{
     const info=id===spyId?{mode:'spyfall',isSpy:true}:{mode:'spyfall',isSpy:false,location:location.name,role:roles[i%roles.length]};
     if(id===selfId){privateInfo=info;showPrivateCard();} else send('spy-private',info,id).catch(()=>{});
@@ -839,6 +868,19 @@ function onSpyQuestion(p,cid){
   const next=state.members[currentSpyTurnId()]; if(next)addSystem(`🎤 Es el turno de ${displayName(next)} de preguntar.`);
 }
 function onSpyTurn(p){ if(state.mode!=='spyfall'||state.final)return; state.spyfall.turnOrder=p?.turnOrder||state.spyfall.turnOrder||[]; state.spyfall.turnIndex=Number(p?.turnIndex||0); renderGameBar(); }
+function pushSpyFinalPhaseToEveryPlayer(deadline){
+  const payload={active:true,deadline};
+  const snapshot={state:snapshotForClient()};
+  for(const id of activePlayerIds()){
+    if(id===selfId){
+      onSpyFinalPhase(payload);
+      continue;
+    }
+    send('spy-final-phase',payload,id).catch(()=>send('spy-final-phase',payload).catch(()=>{}));
+    send('snapshot',snapshot,id).catch(()=>{});
+  }
+}
+
 function beginSpyFinalVoting(){
   if(!isAdmin||state.mode!=='spyfall'||state.final||state.spyfall?.voting)return;
   const deadline=now()+20000;
@@ -852,25 +894,19 @@ function beginSpyFinalVoting(){
   state.spyfall.spyLocationCorrect=false;
   delete state.spyfall.spyLocationPending;
 
-  // One public phase signal is more robust than two different targeted setup messages.
-  // Each device already knows its private role and opens the correct forced modal locally.
-  const payload={active:true,deadline};
-  send('spy-final-phase',payload).catch(()=>{});
-  onSpyFinalPhase(payload);
-
-  // Redundant synchronization through the long-established roster channel.
-  // This makes the forced modal survive a missed packet, mobile backgrounding,
-  // or a client that reconnects during the 20-second final phase.
-  broadcastRoster();
+  // Deliver the final phase directly to every logical player ID. Do not rely on
+  // one room-wide broadcast: mobile clients may miss it while WebRTC is renegotiating.
+  pushSpyFinalPhaseToEveryPlayer(deadline);
+  broadcastRoster(); // fallback/state visibility
   clearInterval(spyPhaseSyncTicker);
   spyPhaseSyncTicker=setInterval(()=>{
     if(!isAdmin||state.mode!=='spyfall'||state.final||state.phase!=='spy-voting'||now()>=deadline){
       clearInterval(spyPhaseSyncTicker);
       return;
     }
+    pushSpyFinalPhaseToEveryPlayer(deadline);
     broadcastRoster();
-    send('spy-final-phase',{active:true,deadline}).catch(()=>{});
-  },1500);
+  },1000);
 
   clearTimeout(spyFinalizeTimer);
   spyFinalizeTimer=setTimeout(finalizeSpyfall,20050);
@@ -1411,13 +1447,17 @@ function showPrivateCard(){
 function showModal(title,html,after){ const m=$('genericModal'); $('genericModalTitle').textContent=title; $('genericModalBody').innerHTML=html; m.classList.remove('hidden'); after?.(m); }
 function closeGenericModal(){ $('genericModal')?.classList.add('hidden'); }
 function leaveRoom(){ try{transportRoom?.leave?.();}catch{} location.reload(); }
-function backToLobby(){
-  if(!joined)return;
+function backToLobby(event){
+  event?.preventDefault?.(); event?.stopPropagation?.();
+  closeGenericModal(); closeSpyFinalChoiceModal(); $('infoPanel')?.classList.remove('open');
   if(!state.started){enterLobby();renderAll();return;}
-  if(!confirm('¿Volver al lobby? La partida actual terminará para todos.'))return;
-  if(isAdmin)returnEveryoneToLobby('La partida volvió al lobby.');
-  else send('return-lobby-request',{}).then(()=>toast('Volviendo al lobby…')).catch(()=>toast('No pude volver al lobby.'));
+  if(isAdmin){returnEveryoneToLobby('La partida volvió al lobby.');return;}
+  if(!state.adminId){toast('No encuentro al administrador de la sala.');return;}
+  send('return-lobby-request',{},state.adminId)
+    .then(()=>toast('Volviendo al lobby…'))
+    .catch(()=>send('return-lobby-request',{}).then(()=>toast('Volviendo al lobby…')).catch(()=>toast('No pude volver al lobby.')));
 }
+window.ELTOPO_BACK_TO_LOBBY=backToLobby;
 function onReturnLobbyRequest(p,cid){
   if(!isAdmin||!state.started||!state.members[cid]||state.members[cid].online===false)return;
   returnEveryoneToLobby('La partida volvió al lobby.');
@@ -1432,7 +1472,7 @@ $('lobbyCopyCode')?.addEventListener('click',()=>navigator.clipboard?.writeText(
 $('lobbyStartBtn')?.addEventListener('click',startGame);
 $('lobbyChangeAvatarBtn')?.addEventListener('click',openAvatarPicker);
 $('lobbyLeaveBtn')?.addEventListener('click',leaveRoom);
-$('messengerBackBtn')?.addEventListener('click',backToLobby);
+// messengerBackBtn uses a direct inline handler so overlays/bubbling cannot steal navigation.
 $('sendBtn')?.addEventListener('click',sendChat);
 $('messageInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}});
 $('emojiBtn')?.addEventListener('click',toggleEmojiPicker);

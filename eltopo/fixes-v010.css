@@ -7,3 +7,7 @@
 .spy-player-vote-avatar{width:82px;height:82px;border-radius:50%;overflow:hidden;background:#dfe5e7;display:grid;place-items:center}.spy-player-vote-avatar img{width:100%;height:100%;object-fit:cover}.spy-player-vote strong{font-size:14px}.spy-player-vote span{font-size:11px;color:#008069;font-weight:800}
 .spy-location-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.spy-location-vote{border:2px solid #e4e8ea;background:#fff;border-radius:12px;padding:13px 8px;display:flex;align-items:center;justify-content:center;gap:7px;min-height:52px}.spy-location-vote strong{font-size:12px}.spy-location-vote.selected{border-color:#7b3ca4;background:#f7effd}.spy-location-vote:disabled{opacity:.55;cursor:default}.spy-location-vote.selected:disabled{opacity:1}
 @media(max-width:700px){.spy-final-choice-grid,.spy-location-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.spy-player-vote{min-height:132px}.spy-player-vote-avatar{width:68px;height:68px}}
+
+
+/* v0.10.10 navigation reliability */
+.messenger-back-btn{position:relative!important;z-index:30!important;flex:0 0 auto!important;pointer-events:auto!important;touch-action:manipulation;min-width:40px;min-height:40px}
