@@ -1,0 +1,25 @@
+name: Fix El Topo v0.10.9 asset URLs
+on:
+  push:
+    paths:
+      - 'eltopo/tools/fix_v0109_asset_urls.py'
+      - '.github/workflows/fix-v0109-asset-urls.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python eltopo/tools/fix_v0109_asset_urls.py
+      - run: node --check eltopo/social-game.js
+      - run: rm -f eltopo/tools/fix_v0109_asset_urls.py .github/workflows/fix-v0109-asset-urls.yml
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Bust El Topo v0.10.9 asset cache' || exit 0
+          git push
