@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.8';
+import { AVATARS } from './game-data.js?v=0.10.9';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.8';
+const VERSION = '0.10.9';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -119,6 +119,7 @@ let mixedFinalizeTimer = null;
 let mixedCountdownTicker = null;
 let spyFinalizeTimer = null;
 let spyCountdownTicker = null;
+let spyPhaseSyncTicker = null;
 let incognitoFinalizeTimer = null;
 let incognitoCountdownTicker = null;
 const peerLeaveTimers = new Map();
@@ -433,10 +434,13 @@ function onSnapshot(p){
   state.started ? enterMessenger() : enterLobby();
   if(!state.started && !myAvatar) openAvatarPicker();
   renderAll();
+  ensureSpyFinalChoiceUI();
 }
 function broadcastRoster(){
   if(!isAdmin)return;
-  send('roster',{members:state.members,adminId:state.adminId,mode:state.mode,phase:state.phase,started:state.started}).catch(()=>{});
+  const spyFinal=state.mode==='spyfall'&&state.phase==='spy-voting'&&state.spyfall?.voting
+    ? {active:true,deadline:Number(state.spyfall.deadline||0)} : null;
+  send('roster',{members:state.members,adminId:state.adminId,mode:state.mode,phase:state.phase,started:state.started,spyFinal}).catch(()=>{});
   renderAll();
 }
 function onRoster(p){
@@ -444,7 +448,15 @@ function onRoster(p){
   const localMe=state.members[selfId];
   state.members=p.members; if(localMe&&state.members[selfId]) state.members[selfId].online=true;
   state.adminId=p.adminId; state.mode=p.mode; state.phase=p.phase; state.started=p.started; isAdmin=state.adminId===selfId;
+  if(p.spyFinal?.active&&state.mode==='spyfall'&&!state.final){
+    state.phase='spy-voting';
+    state.spyfall ||= {};
+    state.spyfall.voting=true;
+    state.spyfall.deadline=Number(p.spyFinal.deadline)||state.spyfall.deadline||now()+20000;
+    state.spyfall.locationWindow=!!privateInfo?.isSpy;
+  }
   renderAll();
+  ensureSpyFinalChoiceUI();
 }
 
 function createRoom(){
@@ -778,6 +790,7 @@ function revealIncognito(){ finalizeIncognito(); }
 function showIncognitoReveal(){ showIncognitoResults(); }
 
 function startSpyfall(ids){
+  clearInterval(spyPhaseSyncTicker);
   state.started=true; state.phase='playing'; state.mode='spyfall'; state.final=false;
   state.spyfall={votes:{},result:null,voting:false,deadline:0,turnOrder:shuffle(ids),turnIndex:0,locationWindow:false,spyGuessSubmitted:false,spyLocationGuess:null,spyLocationCorrect:false};
   state.trigger='Pregunten por turnos. Todos conocen el lugar excepto el espía.'; state.messages=[]; replyingTo=null; enterMessenger();
@@ -844,6 +857,21 @@ function beginSpyFinalVoting(){
   const payload={active:true,deadline};
   send('spy-final-phase',payload).catch(()=>{});
   onSpyFinalPhase(payload);
+
+  // Redundant synchronization through the long-established roster channel.
+  // This makes the forced modal survive a missed packet, mobile backgrounding,
+  // or a client that reconnects during the 20-second final phase.
+  broadcastRoster();
+  clearInterval(spyPhaseSyncTicker);
+  spyPhaseSyncTicker=setInterval(()=>{
+    if(!isAdmin||state.mode!=='spyfall'||state.final||state.phase!=='spy-voting'||now()>=deadline){
+      clearInterval(spyPhaseSyncTicker);
+      return;
+    }
+    broadcastRoster();
+    send('spy-final-phase',{active:true,deadline}).catch(()=>{});
+  },1500);
+
   clearTimeout(spyFinalizeTimer);
   spyFinalizeTimer=setTimeout(finalizeSpyfall,20050);
 }
@@ -942,7 +970,18 @@ function onSpyFinalPhase(p){
     if(now()>=state.spyfall.deadline)clearInterval(spyCountdownTicker);
   },200);
   renderGameBar();
-  setTimeout(()=>privateInfo?.isSpy?openSpyLocationVoteModal():openSpyVoteModal(),0);
+  setTimeout(ensureSpyFinalChoiceUI,0);
+}
+function ensureSpyFinalChoiceUI(){
+  if(state.mode!=='spyfall'||!state.started||state.final||state.phase!=='spy-voting'||!state.spyfall?.voting)return;
+  if(now()>=Number(state.spyfall.deadline||0))return;
+  const modal=$('characterSelectModal');
+  if(privateInfo?.isSpy){
+    state.spyfall.locationWindow=true;
+    if(!modal||modal.classList.contains('hidden')||modal.dataset.spyFinalChoice!=='location')openSpyLocationVoteModal();
+  }else{
+    if(!modal||modal.classList.contains('hidden')||modal.dataset.spyFinalChoice!=='vote')openSpyVoteModal();
+  }
 }
 function onSpyVoting(p){
   if(privateInfo?.isSpy||!p?.voting||state.final)return;
@@ -953,7 +992,7 @@ function onSpyLocationWindow(p){
   onSpyFinalPhase({active:true,deadline:p.deadline});
 }
 function spyLocationWindowOpen(){
-  return state.mode==='spyfall'&&state.started&&!state.final&&privateInfo?.isSpy&&state.spyfall?.locationWindow&&now()<Number(state.spyfall.deadline||0)&&!state.spyfall.spyGuessSubmitted;
+  return state.mode==='spyfall'&&state.started&&!state.final&&privateInfo?.isSpy&&state.phase==='spy-voting'&&state.spyfall?.voting&&now()<Number(state.spyfall.deadline||0)&&!state.spyfall.spyGuessSubmitted;
 }
 function castSpyVote(targetId){
   if(me()?.voteBlocked){toast('El superadmin bloqueó tus votos.');return;}
@@ -995,7 +1034,7 @@ function finalizeSpyfall(){
   send('spy-final',payload).catch(()=>{}); onSpyFinal(payload);
 }
 function onSpyFinal(p){
-  clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker); closeSpyFinalChoiceModal();
+  clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker); clearInterval(spyPhaseSyncTicker); closeSpyFinalChoiceModal();
   state.final=true; state.phase='finished'; state.spyfall.voting=false; state.spyfall.locationWindow=false;
   state.spyfall.result=p.result; state.spyfall.spyId=p.spyId; state.spyfall.spyName=p.spyName; state.spyfall.location=p.location;
   if(p.votes)state.spyfall.votes=p.votes;
@@ -1107,7 +1146,7 @@ function returnEveryoneToLobby(summary='Partida terminada.'){
   }
   state.lobbyMessages ||= [];
   state.lobbyMessages.push({id:uid(),system:true,text:`🏁 ${summary}`,ts:now()});
-  clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker); clearTimeout(incognitoFinalizeTimer); clearInterval(incognitoCountdownTicker); privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger=''; selectedMode=state.mode||selectedMode;
+  clearTimeout(mixedFinalizeTimer); clearInterval(mixedCountdownTicker); clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker); clearInterval(spyPhaseSyncTicker); clearTimeout(incognitoFinalizeTimer); clearInterval(incognitoCountdownTicker); privateInfo=null; personaOptions=null; replyingTo=null; lastMixedIntroTrigger=''; selectedMode=state.mode||selectedMode;
   const payload={state:snapshotForClient()};
   send('return-lobby',payload).catch(()=>{});
   onReturnLobby(payload);
