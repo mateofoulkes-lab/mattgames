@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.7';
+import { AVATARS } from './game-data.js?v=0.10.8';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.7';
+const VERSION = '0.10.8';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -261,6 +261,7 @@ function handleEnvelope(peerId,data){
     case 'spy-vote': return onSpyVote(data.payload,cid);
     case 'spy-question': return onSpyQuestion(data.payload,cid);
     case 'spy-turn': return onSpyTurn(data.payload);
+    case 'spy-final-phase': return onSpyFinalPhase(data.payload);
     case 'spy-voting': return onSpyVoting(data.payload);
     case 'spy-location-window': return onSpyLocationWindow(data.payload);
     case 'spy-location-ack': return onSpyLocationAck(data.payload);
@@ -836,46 +837,120 @@ function beginSpyFinalVoting(){
   state.spyfall.spyGuessSubmitted=false;
   state.spyfall.spyLocationGuess=null;
   state.spyfall.spyLocationCorrect=false;
+  delete state.spyfall.spyLocationPending;
 
-  const votePayload={voting:true,deadline};
-  const spyPayload={active:true,deadline};
-  for(const m of players()){
-    if(m.id===state._spyId){
-      if(m.id===selfId) onSpyLocationWindow(spyPayload);
-      else send('spy-location-window',spyPayload,m.id).catch(()=>{});
-    }else{
-      if(m.id===selfId) onSpyVoting(votePayload);
-      else send('spy-voting',votePayload,m.id).catch(()=>{});
-    }
-  }
+  // One public phase signal is more robust than two different targeted setup messages.
+  // Each device already knows its private role and opens the correct forced modal locally.
+  const payload={active:true,deadline};
+  send('spy-final-phase',payload).catch(()=>{});
+  onSpyFinalPhase(payload);
   clearTimeout(spyFinalizeTimer);
   spyFinalizeTimer=setTimeout(finalizeSpyfall,20050);
-  renderGameBar();
 }
-function onSpyVoting(p){
-  if(privateInfo?.isSpy||!p?.voting||state.final)return;
+function closeSpyFinalChoiceModal(){
+  const modal=$('characterSelectModal');
+  if(!modal)return;
+  if(modal.dataset.spyFinalChoice){
+    modal.classList.add('hidden');
+    delete modal.dataset.spyFinalChoice;
+    $('characterSelectGrid')?.classList.remove('spy-final-choice-grid','spy-location-grid');
+  }
+}
+function updateSpyFinalChoiceCountdown(){
+  const modal=$('characterSelectModal');
+  if(!modal||!modal.dataset.spyFinalChoice||modal.classList.contains('hidden'))return;
+  const left=Math.max(0,Math.ceil((Number(state.spyfall?.deadline||0)-now())/1000));
+  const sub=$('characterSelectSub');
+  if(!sub)return;
+  if(modal.dataset.spyFinalChoice==='location'){
+    const chosen=state.spyfall?.spyLocationGuess||state.spyfall?.spyLocationPending;
+    sub.textContent=chosen?`Elegiste “${chosen}”. Esperando el resultado · ${left}s`:`Elegí una ubicación. Tenés ${left} segundos y una sola oportunidad.`;
+  }else{
+    const chosen=state.spyfall?.votes?.[selfId];
+    const name=chosen?displayName(state.members[chosen]):'';
+    sub.textContent=name?`Tu voto actual: ${name}. Podés cambiarlo · ${left}s`:`Elegí quién creés que es el espía · ${left}s`;
+  }
+}
+function openSpyVoteModal(){
+  if(privateInfo?.isSpy||state.final||!state.spyfall?.voting||now()>=Number(state.spyfall.deadline||0))return;
+  closeGenericModal();
+  const modal=$('characterSelectModal'),grid=$('characterSelectGrid');
+  if(!modal||!grid)return;
+  modal.dataset.spyFinalChoice='vote';
+  $('characterSelectTitle').textContent='🗳️ Votación final';
+  const targets=players().filter(m=>m.id!==selfId);
+  const mine=state.spyfall?.votes?.[selfId]||null;
+  grid.classList.add('spy-final-choice-grid');
+  grid.classList.remove('spy-location-grid');
+  grid.innerHTML=targets.map(m=>`<button class="spy-player-vote ${mine===m.id?'selected':''}" data-spy-final-vote="${m.id}"><div class="spy-player-vote-avatar">${avatarMarkup(m)}</div><strong>${esc(displayName(m))}</strong><span>Votar</span></button>`).join('');
+  grid.querySelectorAll('[data-spy-final-vote]').forEach(b=>b.onclick=()=>{
+    castSpyVote(b.dataset.spyFinalVote);
+    grid.querySelectorAll('[data-spy-final-vote]').forEach(x=>x.classList.toggle('selected',x.dataset.spyFinalVote===b.dataset.spyFinalVote));
+    updateSpyFinalChoiceCountdown();
+  });
+  modal.classList.remove('hidden');
+  updateSpyFinalChoiceCountdown();
+}
+function openSpyLocationVoteModal(){
+  if(!privateInfo?.isSpy||state.final||!state.spyfall?.locationWindow||now()>=Number(state.spyfall.deadline||0))return;
+  closeGenericModal();
+  const modal=$('characterSelectModal'),grid=$('characterSelectGrid');
+  if(!modal||!grid)return;
+  modal.dataset.spyFinalChoice='location';
+  $('characterSelectTitle').textContent='🕵️ ¿Dónde están?';
+  const chosen=state.spyfall?.spyLocationGuess||state.spyfall?.spyLocationPending||null;
+  grid.classList.add('spy-final-choice-grid','spy-location-grid');
+  grid.innerHTML=SPY_LOCATIONS.map(l=>`<button class="spy-location-vote ${chosen===l.name?'selected':''}" data-spy-final-location="${esc(l.name)}" ${state.spyfall?.spyGuessSubmitted?'disabled':''}><span>📍</span><strong>${esc(l.name)}</strong></button>`).join('');
+  grid.querySelectorAll('[data-spy-final-location]').forEach(b=>b.onclick=()=>castSpyLocationVote(b.dataset.spyFinalLocation));
+  modal.classList.remove('hidden');
+  updateSpyFinalChoiceCountdown();
+}
+function castSpyLocationVote(location){
+  if(!spyLocationWindowOpen())return;
+  const guess=String(location||'').trim(); if(!guess)return;
+  state.spyfall.spyGuessSubmitted=true;
+  state.spyfall.spyLocationPending=guess;
+  openSpyLocationVoteModal();
+  const payload={location:guess};
+  if(isAdmin){
+    onSpyGuessLocation(payload,selfId);
+  }else{
+    // Broadcast is intentional: only the host processes this message, but it avoids a
+    // fragile logical-id targeted route that could leave the spy unable to submit.
+    send('spy-guess-location',payload).catch(()=>{
+      state.spyfall.spyGuessSubmitted=false;
+      delete state.spyfall.spyLocationPending;
+      toast('No pude enviar tu elección. Probá nuevamente.');
+      openSpyLocationVoteModal();
+    });
+  }
+  updateSpyFinalChoiceCountdown();
+}
+function onSpyFinalPhase(p){
+  if(!p?.active||state.mode!=='spyfall'||state.final)return;
   state.phase='spy-voting';
   state.spyfall.voting=true;
   state.spyfall.deadline=Number(p.deadline)||now()+20000;
+  state.spyfall.spyGuessSubmitted=false;
+  state.spyfall.spyLocationGuess=null;
+  delete state.spyfall.spyLocationPending;
+  state.spyfall.locationWindow=!!privateInfo?.isSpy;
   clearInterval(spyCountdownTicker);
   spyCountdownTicker=setInterval(()=>{
     renderGameBar();
+    updateSpyFinalChoiceCountdown();
     if(now()>=state.spyfall.deadline)clearInterval(spyCountdownTicker);
   },200);
   renderGameBar();
+  setTimeout(()=>privateInfo?.isSpy?openSpyLocationVoteModal():openSpyVoteModal(),0);
+}
+function onSpyVoting(p){
+  if(privateInfo?.isSpy||!p?.voting||state.final)return;
+  onSpyFinalPhase({active:true,deadline:p.deadline});
 }
 function onSpyLocationWindow(p){
   if(!privateInfo?.isSpy||!p?.active||state.final)return;
-  state.spyfall.locationWindow=true;
-  state.spyfall.deadline=Number(p.deadline)||now()+20000;
-  state.spyfall.spyGuessSubmitted=false;
-  state.spyfall.spyLocationGuess=null;
-  clearInterval(spyCountdownTicker);
-  spyCountdownTicker=setInterval(()=>{
-    renderGameBar();
-    if(now()>=state.spyfall.deadline)clearInterval(spyCountdownTicker);
-  },200);
-  renderGameBar();
+  onSpyFinalPhase({active:true,deadline:p.deadline});
 }
 function spyLocationWindowOpen(){
   return state.mode==='spyfall'&&state.started&&!state.final&&privateInfo?.isSpy&&state.spyfall?.locationWindow&&now()<Number(state.spyfall.deadline||0)&&!state.spyfall.spyGuessSubmitted;
@@ -920,7 +995,7 @@ function finalizeSpyfall(){
   send('spy-final',payload).catch(()=>{}); onSpyFinal(payload);
 }
 function onSpyFinal(p){
-  clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker);
+  clearTimeout(spyFinalizeTimer); clearInterval(spyCountdownTicker); closeSpyFinalChoiceModal();
   state.final=true; state.phase='finished'; state.spyfall.voting=false; state.spyfall.locationWindow=false;
   state.spyfall.result=p.result; state.spyfall.spyId=p.spyId; state.spyfall.spyName=p.spyName; state.spyfall.location=p.location;
   if(p.votes)state.spyfall.votes=p.votes;
@@ -946,11 +1021,7 @@ function guessSpyLocation(){
     if(privateInfo?.isSpy&&!state.final)toast('Podés elegir el lugar durante los 20 segundos de la votación final.');
     return;
   }
-  showModal('Elegí el lugar',`<p class="modal-note">Tenés una sola elección. Si acertás, ganás aunque el grupo te haya descubierto.</p><div class="guess-list">${SPY_LOCATIONS.map(l=>`<button class="guess-option" data-loc="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`,modal=>modal.querySelectorAll('[data-loc]').forEach(b=>b.onclick=()=>{
-    const payload={location:b.dataset.loc};
-    if(isAdmin)onSpyGuessLocation(payload,selfId); else send('spy-guess-location',payload,state.adminId).catch(()=>toast('No pude enviar tu elección.'));
-    closeGenericModal();
-  }));
+  openSpyLocationVoteModal();
 }
 function onSpyGuessLocation(p,cid){
   if(!isAdmin||state.mode!=='spyfall'||state.final||cid!==state._spyId||!state.spyfall?.voting)return;
@@ -970,9 +1041,9 @@ function onSpyGuessLocation(p,cid){
 }
 function onSpyLocationAck(p){
   if(!privateInfo?.isSpy||state.final)return;
-  state.spyfall.spyGuessSubmitted=true; state.spyfall.spyLocationGuess=p?.guess||null;
+  state.spyfall.spyGuessSubmitted=true; state.spyfall.spyLocationGuess=p?.guess||null; delete state.spyfall.spyLocationPending;
   if(!p?.correct)toast(`Elegiste “${p?.guess||'—'}”. No acertaste; esperá el resultado de la ronda.`);
-  renderGameBar();
+  renderGameBar(); openSpyLocationVoteModal(); updateSpyFinalChoiceCountdown();
 }
 function kickLobbyMember(targetId){
   if(!isAdmin||state.started||targetId===selfId||!state.members[targetId])return;
