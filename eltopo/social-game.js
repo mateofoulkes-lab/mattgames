@@ -923,7 +923,7 @@ function showSpyResult(p){
 }
 function guessSpyLocation(){
   if(!spyLocationWindowOpen()){
-    if(privateInfo?.isSpy&&!state.final)toast('Podés elegir el lugar durante los 10 segundos de la votación final.');
+    if(privateInfo?.isSpy&&!state.final)toast('Podés elegir el lugar durante los 20 segundos de la votación final.');
     return;
   }
   showModal('Elegí el lugar',`<p class="modal-note">Tenés una sola elección. Si acertás, ganás aunque el grupo te haya descubierto.</p><div class="guess-list">${SPY_LOCATIONS.map(l=>`<button class="guess-option" data-loc="${esc(l.name)}">${esc(l.name)}</button>`).join('')}</div>`,modal=>modal.querySelectorAll('[data-loc]').forEach(b=>b.onclick=()=>{
