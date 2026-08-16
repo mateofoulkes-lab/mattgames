@@ -1,0 +1,30 @@
+name: Apply El Topo v0.10.6
+on:
+  push:
+    paths:
+      - 'eltopo/tools/apply_v0106.py'
+      - 'eltopo/spyfall-finale.css'
+      - '.github/workflows/apply-v0106.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply Spyfall polish
+        run: python eltopo/tools/apply_v0106.py
+      - name: Validate JavaScript
+        run: node --check eltopo/social-game.js && node --check eltopo/mixed-avatar-sync.js
+      - name: Remove one-off patch files
+        run: rm -f eltopo/tools/apply_v0106.py .github/workflows/apply-v0106.yml
+      - name: Commit v0.10.6
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add eltopo/social-game.js eltopo/index.html eltopo/mixed-avatar-sync.js eltopo/spyfall-finale.css eltopo/tools/apply_v0106.py .github/workflows/apply-v0106.yml || true
+          git diff --cached --quiet || git commit -m 'Polish Spyfall voting finale and back navigation'
+          git push
