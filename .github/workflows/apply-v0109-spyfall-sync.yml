@@ -1,0 +1,29 @@
+name: Apply El Topo v0.10.9 Spyfall sync
+on:
+  push:
+    paths:
+      - 'eltopo/tools/fix_spyfall_vote_sync_v0109.py'
+      - '.github/workflows/apply-v0109-spyfall-sync.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply Spyfall final-phase synchronization fix
+        run: python eltopo/tools/fix_spyfall_vote_sync_v0109.py
+      - name: Validate JavaScript
+        run: node --check eltopo/social-game.js && node --check eltopo/mixed-avatar-sync.js
+      - name: Remove one-off patch files
+        run: rm -f eltopo/tools/fix_spyfall_vote_sync_v0109.py .github/workflows/apply-v0109-spyfall-sync.yml
+      - name: Commit v0.10.9
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix Spyfall final voting sync for every player' || exit 0
+          git push
