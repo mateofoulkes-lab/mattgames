@@ -1,8 +1,8 @@
-import { AVATARS } from './game-data.js?v=0.10.14';
+import { AVATARS } from './game-data.js?v=0.10.15';
 import { makeIncognitoPersona } from './incognito-personas.js';
 import { joinRoom as joinTransport, selfId } from './metered-trystero-adapter.js';
 
-const VERSION = '0.10.14';
+const VERSION = '0.10.15';
 const SUPERADMIN_PROOF = 'f52acce5d5e525dc7e108db0f97651448ec60c0e773863cf2ead2f5aa337bf6c';
 const APP_MARK = 'mattgames-social-whatsapp-v1';
 const MAX_PLAYERS = 12;
@@ -1242,6 +1242,7 @@ function renderRoomLobby(){
   if($('lobbyTitle'))$('lobbyTitle').textContent=`Sala ${roomCode||state.roomCode||'----'}`;
   if($('lobbyPlayerCount'))$('lobbyPlayerCount').textContent=`${members.length}/${MAX_PLAYERS} jugadores`;
   if($('lobbyModeHint'))$('lobbyModeHint').textContent=isAdmin?'Elegí qué van a jugar.':'El administrador está eligiendo el modo.';
+  const qrBtn=$('lobbyQrBtn'); if(qrBtn)qrBtn.classList.toggle('hidden',!isAdmin);
   const playersBox=$('lobbyPlayers');
   if(playersBox){
     playersBox.innerHTML=members.map(m=>`<div class="lobby-player-card"><button class="lobby-player-main" data-lobby-profile="${m.id}"><div class="lobby-player-avatar">${avatarMarkup(m)}</div><div class="lobby-player-copy"><strong>${esc(m.realName)}${m.id===selfId?' (vos)':''}</strong><span>listo</span></div>${m.id===state.adminId?'<b class="lobby-admin-tag">ADMIN</b>':''}</button>${isAdmin&&m.id!==selfId?`<button class="lobby-kick-user" data-lobby-kick="${m.id}" title="Echar de la sala">Echar</button>`:''}</div>`).join('');
@@ -1485,6 +1486,37 @@ function showPrivateCard(){
   }
 }
 
+function roomInviteUrl(){
+  const u=new URL(location.href);
+  u.search='';
+  u.hash='';
+  u.searchParams.set('room',roomCode);
+  return u.toString();
+}
+function openRoomQr(){
+  if(!isAdmin||!roomCode)return;
+  const modal=$('roomQrModal'),box=$('roomQrImage');
+  if(!modal||!box)return;
+  if(typeof window.qrcode!=='function'){toast('No pude generar el QR.');return;}
+  const invite=roomInviteUrl();
+  const qr=window.qrcode(0,'M');
+  qr.addData(invite);
+  qr.make();
+  box.innerHTML=qr.createSvgTag(7,4);
+  if($('roomQrCode'))$('roomQrCode').textContent=roomCode;
+  if($('roomQrLink'))$('roomQrLink').textContent=invite.replace(/^https?:\/\//,'');
+  modal.classList.remove('hidden');
+}
+function closeRoomQr(){ $('roomQrModal')?.classList.add('hidden'); }
+function applyRoomInviteFromUrl(){
+  const invite=cleanCode(new URLSearchParams(location.search).get('room'));
+  if(invite.length!==4)return;
+  if($('joinCode'))$('joinCode').value=invite;
+  if($('joinRoomBtn'))$('joinRoomBtn').textContent=`Entrar a ${invite}`;
+  if($('landingError'))$('landingError').textContent=`Invitación a la sala ${invite}. Poné tu nombre para entrar.`;
+  setTimeout(()=>$('playerName')?.focus(),0);
+}
+
 function showModal(title,html,after){ const m=$('genericModal'); $('genericModalTitle').textContent=title; $('genericModalBody').innerHTML=html; m.classList.remove('hidden'); after?.(m); }
 function closeGenericModal(){ $('genericModal')?.classList.add('hidden'); }
 function leaveRoom(){ try{transportRoom?.leave?.();}catch{} location.reload(); }
@@ -1510,6 +1542,10 @@ $('joinCode')?.addEventListener('input',e=>e.target.value=cleanCode(e.target.val
 $('lobbyChatSend')?.addEventListener('click',sendLobbyChat);
 $('lobbyChatInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendLobbyChat();}});
 $('lobbyCopyCode')?.addEventListener('click',()=>navigator.clipboard?.writeText(roomCode).then(()=>toast('Código copiado')));
+$('lobbyQrBtn')?.addEventListener('click',openRoomQr);
+$('closeRoomQr')?.addEventListener('click',closeRoomQr);
+$('copyRoomInvite')?.addEventListener('click',()=>navigator.clipboard?.writeText(roomInviteUrl()).then(()=>toast('Enlace copiado')));
+$('roomQrModal')?.addEventListener('click',e=>{if(e.target.id==='roomQrModal')closeRoomQr();});
 $('lobbyStartBtn')?.addEventListener('click',startGame);
 $('lobbyChangeAvatarBtn')?.addEventListener('click',openAvatarPicker);
 $('lobbyLeaveBtn')?.addEventListener('click',leaveRoom);
@@ -1525,7 +1561,7 @@ $('meProfileBtn')?.addEventListener('click',showPrivateCard);
 $('closeGenericModal')?.addEventListener('click',closeGenericModal);
 $('genericModal')?.addEventListener('click',e=>{if(e.target.id==='genericModal')closeGenericModal();});
 document.addEventListener('click',e=>{ if(reactionTarget&&!e.target.closest('#reactionPicker')&&!e.target.closest('[data-react]'))closeReactionPicker(); });
-buildEmojiPicker(); renderComposerReply(); renderAll();
+applyRoomInviteFromUrl(); buildEmojiPicker(); renderComposerReply(); renderAll();
 setInterval(()=>{if(joined&&roomCode)for(const id of [...superadminPeers])sendSuperadminState(id);},3000);
 const superadminNotice=sessionStorage.getItem('eltopo-superadmin-notice'); if(superadminNotice){sessionStorage.removeItem('eltopo-superadmin-notice'); if($('landingError'))$('landingError').textContent=superadminNotice;}
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&joined){ sendIntro(); renderAll(); } });
