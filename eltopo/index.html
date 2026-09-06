@@ -8,12 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./social.css?v=0.10.14" />
-  <link rel="stylesheet" href="./lobby.css?v=0.10.14" />
-  <link rel="stylesheet" href="./fixes-v010.css?v=0.10.14" />
+  <link rel="stylesheet" href="./social.css?v=0.10.15" />
+  <link rel="stylesheet" href="./lobby.css?v=0.10.15" />
+  <link rel="stylesheet" href="./fixes-v010.css?v=0.10.15" />
 </head>
 <body>
-  <div id="connectionBadge" class="connection-badge">v0.10.14</div>
+  <div id="connectionBadge" class="connection-badge">v0.10.15</div>
 
   <section id="landing" class="landing screen active">
     <div class="landing-card">
@@ -43,7 +43,10 @@
         </div>
         <div class="lobby-code-box">
           <div class="lobby-code-copy"><span>CÓDIGO</span><strong id="lobbyRoomCode">----</strong></div>
-          <button id="lobbyCopyCode" class="lobby-copy-btn">Copiar</button>
+          <div class="lobby-code-actions">
+            <button id="lobbyCopyCode" class="lobby-copy-btn">Copiar</button>
+            <button id="lobbyQrBtn" class="lobby-copy-btn lobby-qr-btn hidden" type="button">QR</button>
+          </div>
         </div>
         <button id="lobbyLeaveBtn" class="lobby-quiet-btn">Salir</button>
       </header>
@@ -133,6 +136,20 @@
     </div>
   </div>
 
+  <div id="roomQrModal" class="modal-backdrop hidden">
+    <div class="room-qr-card">
+      <div class="room-qr-head">
+        <div><span>INVITAR A LA SALA</span><h2>Escaneá para entrar</h2></div>
+        <button id="closeRoomQr" class="modal-close" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <div id="roomQrImage" class="room-qr-image" aria-label="Código QR de la sala"></div>
+      <div class="room-qr-code"><span>SALA</span><strong id="roomQrCode">----</strong></div>
+      <p>Escaneá el QR con la cámara del celular. El código de sala se carga automáticamente; sólo falta poner el nombre y entrar.</p>
+      <small id="roomQrLink"></small>
+      <button id="copyRoomInvite" class="room-qr-copy" type="button">Copiar enlace de invitación</button>
+    </div>
+  </div>
+
   <div id="genericModal" class="modal-backdrop hidden">
     <div class="generic-modal-card">
       <div class="generic-modal-head"><h2 id="genericModalTitle"></h2><button id="closeGenericModal" class="modal-close">×</button></div>
@@ -140,8 +157,9 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
   <script src="https://unpkg.com/@metered-ca/realtime@1/dist/index.umd.js"></script>
-  <script type="module" src="./social-game.js?v=0.10.14"></script>
-  <script type="module" src="./mixed-avatar-sync.js?v=0.10.14"></script>
+  <script type="module" src="./social-game.js?v=0.10.15"></script>
+  <script type="module" src="./mixed-avatar-sync.js?v=0.10.15"></script>
 </body>
 </html>
