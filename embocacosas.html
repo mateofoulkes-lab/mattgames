@@ -3,199 +3,203 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Embocacosas en tacho — prototipo</title>
+<title>Embocacosas en tacho</title>
 <style>
-  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#171717;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#fff}
-  canvas{display:block}
-  #hud{position:fixed;inset:0;pointer-events:none}
-  #title{position:absolute;left:18px;top:14px;font-weight:800;letter-spacing:.04em;text-shadow:0 2px 8px #000}
-  #sub{font-size:12px;font-weight:500;opacity:.78;letter-spacing:0}
-  #score{position:absolute;right:18px;top:14px;background:#0009;border:1px solid #ffffff22;border-radius:12px;padding:10px 13px;backdrop-filter:blur(7px);font-weight:800}
-  #reticle{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #0008,0 0 12px #0008}
-  #reticle:after{content:"";position:absolute;left:7px;top:7px;width:4px;height:4px;background:#fff;border-radius:50%}
-  #powerWrap{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);width:min(360px,72vw);height:15px;background:#000a;border:1px solid #ffffff33;border-radius:99px;overflow:hidden}
-  #power{height:100%;width:0%;background:linear-gradient(90deg,#8dd56d,#ffd24a,#ff6048)}
-  #hint{position:absolute;left:50%;bottom:58px;transform:translateX(-50%);font-size:12px;background:#0009;padding:6px 10px;border-radius:8px;white-space:nowrap}
-  #credit{position:absolute;left:16px;bottom:12px;font-size:10px;opacity:.55}
-  #reset{pointer-events:auto;position:absolute;right:18px;bottom:18px;border:1px solid #ffffff33;border-radius:10px;background:#111b;color:#fff;padding:9px 12px;font-weight:700;cursor:pointer}
-  @media(max-width:680px){#title{font-size:14px}#sub{display:none}#hint{font-size:10px;bottom:60px}#reset{bottom:14px}.desktop{display:none}}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#1b1d1c;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+canvas{display:block;touch-action:none}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+#title{position:absolute;left:16px;top:13px;font-weight:900;letter-spacing:.04em;text-shadow:0 2px 8px #000}
+#sub{font-size:11px;font-weight:600;opacity:.72;letter-spacing:0;margin-top:2px}
+#score{position:absolute;right:16px;top:13px;background:#0009;border:1px solid #ffffff28;border-radius:11px;padding:8px 11px;font-weight:900;backdrop-filter:blur(6px)}
+#cross{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #0008}
+#cross:after{content:"";position:absolute;left:7px;top:7px;width:4px;height:4px;border-radius:50%;background:#fff}
+#hint{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);font-size:11px;background:#000a;border:1px solid #ffffff20;padding:6px 9px;border-radius:8px;white-space:nowrap}
+#powerShell{position:absolute;left:50%;bottom:27px;transform:translateX(-50%);height:12px;width:min(330px,72vw);border-radius:99px;background:#000c;border:1px solid #ffffff25;overflow:hidden}
+#power{width:0%;height:100%;background:linear-gradient(90deg,#76d66d,#ffd454,#ff5745)}
+#reset{pointer-events:auto;position:absolute;right:14px;bottom:14px;border:1px solid #ffffff2e;background:#111c;color:white;padding:8px 11px;border-radius:9px;font-weight:800;cursor:pointer}
+#error{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(620px,88vw);background:#220f0fe8;border:1px solid #ff8b8b66;padding:14px 16px;border-radius:12px;font-size:13px;line-height:1.35;pointer-events:auto}
+@media(max-width:650px){#title{font-size:13px}#sub{display:none}#hint{font-size:10px}.desktop{display:none}}
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 <div id="hud">
-  <div id="title">EMBOCACOSAS EN TACHO<div id="sub">escena reconstruida desde las fotos de referencia</div></div>
+  <div id="title">EMBOCACOSAS EN TACHO<div id="sub">prototipo de escena 3D · texmaps generados desde las fotos reales</div></div>
   <div id="score">0 / 0</div>
-  <div id="reticle"></div>
-  <div id="hint"><span class="desktop">Botón derecho: mirar · rueda: zoom · </span>Mantené click/touch para cargar y soltá para tirar</div>
-  <div id="powerWrap"><div id="power"></div></div>
-  <div id="credit">Texturas fotográficas extraídas de las referencias originales.</div>
-  <button id="reset">Reiniciar física</button>
+  <div id="cross"></div>
+  <div id="hint"><span class="desktop">Botón derecho: mirar · rueda: zoom · </span>Mantené click/touch y soltá para arrojar</div>
+  <div id="powerShell"><div id="power"></div></div>
+  <button id="reset">Reiniciar</button>
+  <div id="error"></div>
 </div>
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js';
-import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm';
 
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x858682);
-scene.fog=new THREE.Fog(0x858682,12,25);
-const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.05,60);
-camera.position.set(0.15,2.05,6.3);
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-renderer.outputColorSpace=THREE.SRGBColorSpace;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.06;
-document.body.prepend(renderer.domElement);
+const AS='embocacosas-assets/';
+const errorBox=document.getElementById('error');
+function fail(e){console.error(e);errorBox.style.display='block';errorBox.textContent='Error cargando la escena 3D: '+(e?.message||e);}
 
-const controls=new OrbitControls(camera,renderer.domElement);
-controls.target.set(.1,1.15,-1.25);
-controls.enableDamping=true;
-controls.dampingFactor=.055;
-controls.minDistance=3.5; controls.maxDistance=9;
-controls.minPolarAngle=.55; controls.maxPolarAngle=1.48;
-controls.mouseButtons={LEFT:null,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};
-controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};
+async function main(){
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x858985);
+  scene.fog=new THREE.Fog(0x858985,13,26);
 
-scene.add(new THREE.HemisphereLight(0xe8edf5,0x4d4c45,1.55));
-const key=new THREE.DirectionalLight(0xfff4db,2.2); key.position.set(-2,6,5); key.castShadow=true;
-key.shadow.mapSize.set(2048,2048); key.shadow.camera.left=-7;key.shadow.camera.right=7;key.shadow.camera.top=7;key.shadow.camera.bottom=-4;scene.add(key);
-const fill=new THREE.PointLight(0xdde9ff,30,12,2); fill.position.set(3.2,3.2,2.5);scene.add(fill);
+  const camera=new THREE.PerspectiveCamera(57,innerWidth/innerHeight,.05,80);
+  camera.position.set(.05,2.05,6.25);
 
-const loader=new THREE.TextureLoader();
-const atlas=await loader.loadAsync('./embocacosas-assets/atlas.jpg');
-atlas.colorSpace=THREE.SRGBColorSpace;
-atlas.minFilter=THREE.LinearMipmapLinearFilter;
-atlas.magFilter=THREE.LinearFilter;
-function cropTex(x,y,w,h){
-  const t=atlas.clone(); t.needsUpdate=true; t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
-  t.repeat.set(w/1024,h/1024); t.offset.set(x/1024,1-(y+h)/1024);
-  return t;
+  const renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.05;
+  document.body.prepend(renderer.domElement);
+
+  const controls=new OrbitControls(camera,renderer.domElement);
+  controls.target.set(.25,1.2,-1.15);
+  controls.enableDamping=true; controls.dampingFactor=.06;
+  controls.minDistance=3.4; controls.maxDistance=9;
+  controls.minPolarAngle=.58; controls.maxPolarAngle=1.48;
+  controls.mouseButtons={LEFT:null,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};
+  controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};
+
+  scene.add(new THREE.HemisphereLight(0xf2f4ef,0x494a45,1.65));
+  const sun=new THREE.DirectionalLight(0xfff2d8,2.3); sun.position.set(-3,6,5); sun.castShadow=true;
+  sun.shadow.mapSize.set(1536,1536); sun.shadow.camera.left=-6; sun.shadow.camera.right=6; sun.shadow.camera.top=7; sun.shadow.camera.bottom=-3; scene.add(sun);
+  const fill=new THREE.PointLight(0xe6efff,18,11,2); fill.position.set(3.5,3.2,2.8); scene.add(fill);
+
+  const loader=new THREE.TextureLoader();
+  const load=async name=>{const t=await loader.loadAsync(AS+name);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t};
+  const [wallTex,floorTex,boxTex,binAtlas,extAtlas]=await Promise.all([
+    load('wall.jpg'),load('floor.jpg'),load('box.jpg'),load('bin_atlas.jpg'),load('extinguisher_atlas.jpg')
+  ]);
+
+  function cropTexture(src,u,v,w,h,outW=1024,outH=512){
+    const img=src.image,c=document.createElement('canvas');c.width=outW;c.height=outH;
+    const g=c.getContext('2d');
+    g.drawImage(img,u*img.width,v*img.height,w*img.width,h*img.height,0,0,outW,outH);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t;
+  }
+  const binWrap=cropTexture(binAtlas,0.00,0.00,0.77,0.58,1024,512);
+  binWrap.wrapS=THREE.RepeatWrapping;
+  const extWrap=cropTexture(extAtlas,0.00,0.23,1.00,0.56,1024,512);
+  extWrap.wrapS=THREE.RepeatWrapping;
+
+  const std=(map,rough=.86,metal=.02,extra={})=>new THREE.MeshStandardMaterial({map,roughness:rough,metalness:metal,...extra});
+  const box=(size,pos,mat)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(...size),mat);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;scene.add(m);return m};
+
+  const wallMat=std(wallTex,.96,0);
+  const wall=new THREE.Mesh(new THREE.PlaneGeometry(9.5,7.125),wallMat);
+  wall.position.set(0,3.56,-2.83); wall.receiveShadow=true; scene.add(wall);
+
+  floorTex.wrapS=floorTex.wrapT=THREE.ClampToEdgeWrapping;
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(11.5,11.5),std(floorTex,.92,.02));
+  floor.rotation.x=-Math.PI/2; floor.rotation.z=Math.PI; floor.position.set(0,0,1.35); floor.receiveShadow=true; scene.add(floor);
+
+  const blue=new THREE.MeshStandardMaterial({color:0x185982,roughness:.74,metalness:.25});
+  box([1.18,.88,.28],[3.15,1.72,-2.58],blue);
+  const bf=new THREE.Mesh(new THREE.PlaneGeometry(1.12,.82),std(boxTex,.87,.04));bf.position.set(3.15,1.72,-2.435);scene.add(bf);
+  const lock=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.035,20),new THREE.MeshStandardMaterial({color:0x202322,metalness:.7,roughness:.4}));lock.rotation.x=Math.PI/2;lock.position.set(3.48,1.62,-2.405);scene.add(lock);
+  const cableCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(3.48,2.15,-2.53),new THREE.Vector3(3.67,2.62,-2.45),new THREE.Vector3(3.63,3.15,-2.43)]);
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(cableCurve,24,.032,8,false),new THREE.MeshStandardMaterial({color:0x111211,roughness:.75})));
+
+  const steel=new THREE.MeshStandardMaterial({color:0x202321,roughness:.62,metalness:.48});
+  const binX=.62, binZ=-1.55, binR=.56, binH=1.42, axleY=.72;
+  for(const x of [binX-binR-.12,binX+binR+.12]){
+    box([.105,1.03,.15],[x,.515,binZ],steel); box([.27,.08,.58],[x,.04,binZ],steel);
+  }
+  const axleMesh=new THREE.Mesh(new THREE.CylinderGeometry(.065,.065,1.52,18),steel);axleMesh.rotation.z=Math.PI/2;axleMesh.position.set(binX,axleY,binZ);scene.add(axleMesh);
+
+  const world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.82,0)});world.allowSleep=true;
+  world.defaultContactMaterial.friction=.5;world.defaultContactMaterial.restitution=.2;
+  const ground=new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Plane()});ground.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(ground);
+  world.addBody(new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Box(new CANNON.Vec3(4.75,3.5,.08)),position:new CANNON.Vec3(0,3.5,-2.84)}));
+
+  const binGroup=new THREE.Group();scene.add(binGroup);
+  const bodyMesh=new THREE.Mesh(new THREE.CylinderGeometry(binR,binR*.94,binH,40,1,true),std(binWrap,.7,.16));bodyMesh.castShadow=true;bodyMesh.receiveShadow=true;binGroup.add(bodyMesh);
+  const inner=new THREE.Mesh(new THREE.CylinderGeometry(binR*.91,binR*.87,binH*.97,40,1,true),new THREE.MeshStandardMaterial({color:0x5a4c25,side:THREE.BackSide,roughness:1}));binGroup.add(inner);
+  const rimMat=new THREE.MeshStandardMaterial({color:0xc89300,roughness:.62,metalness:.3});
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(binR,.042,10,40),rimMat);rim.rotation.x=Math.PI/2;rim.position.y=binH/2;binGroup.add(rim);
+  const binPhys=new CANNON.Body({mass:16,position:new CANNON.Vec3(binX,.94,binZ),linearDamping:.2,angularDamping:.35});
+  const segs=16,th=.035,segW=2*Math.PI*binR/segs*.88;
+  for(let i=0;i<segs;i++){
+    const a=i*2*Math.PI/segs,q=new CANNON.Quaternion();q.setFromEuler(0,a,0);
+    binPhys.addShape(new CANNON.Box(new CANNON.Vec3(segW/2,binH/2,th)),new CANNON.Vec3(Math.sin(a)*(binR-th),0,Math.cos(a)*(binR-th)),q);
+  }
+  binPhys.addShape(new CANNON.Cylinder(binR*.88,binR*.88,.055,24),new CANNON.Vec3(0,-binH/2+.035,0));world.addBody(binPhys);
+  const axle=new CANNON.Body({type:CANNON.Body.STATIC,position:new CANNON.Vec3(binX,axleY,binZ)});world.addBody(axle);
+  world.addConstraint(new CANNON.HingeConstraint(axle,binPhys,{pivotA:new CANNON.Vec3(),axisA:new CANNON.Vec3(1,0,0),pivotB:new CANNON.Vec3(0,-.22,0),axisB:new CANNON.Vec3(1,0,0),collideConnected:false}));
+
+  const extGroup=new THREE.Group();scene.add(extGroup);
+  const extCylinder=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.73,28,1,true),std(extWrap,.63,.14));extCylinder.castShadow=true;extGroup.add(extCylinder);
+  const extTop=new THREE.Mesh(new THREE.SphereGeometry(.18,24,12,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0xb91e1d,roughness:.63,metalness:.12}));extTop.position.y=.365;extGroup.add(extTop);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.13,16),new THREE.MeshStandardMaterial({color:0x8f744f,roughness:.48,metalness:.62}));neck.position.y=.48;extGroup.add(neck);
+  const handle= new THREE.Mesh(new THREE.BoxGeometry(.28,.045,.055),new THREE.MeshStandardMaterial({color:0x282a28,roughness:.48,metalness:.62}));handle.position.set(.07,.57,0);handle.rotation.z=-.15;extGroup.add(handle);
+  const hoseCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(.12,.48,0),new THREE.Vector3(.28,.3,.02),new THREE.Vector3(.25,.03,.04),new THREE.Vector3(.18,-.18,.06)]);
+  extGroup.add(new THREE.Mesh(new THREE.TubeGeometry(hoseCurve,20,.022,8,false),new THREE.MeshStandardMaterial({color:0x171817,roughness:.78})));
+  extGroup.position.set(-2.6,1.92,-2.52);
+  box([.42,.06,.12],[-2.6,2.24,-2.65],steel);
+  const extPhys=new CANNON.Body({mass:5,shape:new CANNON.Cylinder(.18,.18,.73,16),position:new CANNON.Vec3(-2.6,1.92,-2.52),linearDamping:.15,angularDamping:.18});world.addBody(extPhys);
+  const extAnchor=new CANNON.Body({type:CANNON.Body.STATIC,position:new CANNON.Vec3(-2.6,2.26,-2.56)});world.addBody(extAnchor);
+  let extConstraint=new CANNON.LockConstraint(extAnchor,extPhys,{maxForce:1200});world.addConstraint(extConstraint);
+  let extHanging=true;
+  extPhys.addEventListener('collide',ev=>{if(extHanging && ev.contact.getImpactVelocityAlongNormal()>3.1){world.removeConstraint(extConstraint);extHanging=false;}});
+
+  const throws=[]; let attempts=0,hits=0,charging=false,chargeStart=0;
+  const score=document.getElementById('score'),power=document.getElementById('power');
+  function spawnThrow(){
+    const isBox=Math.random()<.5;
+    const geo=isBox?new THREE.BoxGeometry(.22,.22,.22):new THREE.SphereGeometry(.14,18,12);
+    const mat=new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(Math.random(),.52,.55),roughness:.62});
+    const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;scene.add(m);
+    const shape=isBox?new CANNON.Box(new CANNON.Vec3(.11,.11,.11)):new CANNON.Sphere(.14);
+    const b=new CANNON.Body({mass:.65,shape,linearDamping:.02,angularDamping:.04});world.addBody(b);
+    const dir=new THREE.Vector3();camera.getWorldDirection(dir);const start=camera.position.clone().add(dir.clone().multiplyScalar(.52)).add(new THREE.Vector3(0,-.16,0));
+    b.position.set(start.x,start.y,start.z);
+    const held=Math.min(1.65,(performance.now()-chargeStart)/900),speed=5.8+held*8.5;
+    b.velocity.set(dir.x*speed,dir.y*speed+1.25,dir.z*speed);b.angularVelocity.set((Math.random()-.5)*10,(Math.random()-.5)*10,(Math.random()-.5)*10);
+    throws.push({m,b,scored:false,born:performance.now()});attempts++;score.textContent=`${hits} / ${attempts}`;
+  }
+  function pointerDown(e){if(e.button!==undefined&&e.button!==0)return;charging=true;chargeStart=performance.now();}
+  function pointerUp(){if(!charging)return;charging=false;spawnThrow();power.style.width='0%';}
+  renderer.domElement.addEventListener('pointerdown',pointerDown);window.addEventListener('pointerup',pointerUp);
+  renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+
+  function reset(){
+    for(const o of throws){scene.remove(o.m);world.removeBody(o.b)}throws.length=0;attempts=hits=0;score.textContent='0 / 0';
+    binPhys.position.set(binX,.94,binZ);binPhys.quaternion.set(0,0,0,1);binPhys.velocity.setZero();binPhys.angularVelocity.setZero();
+    extPhys.position.set(-2.6,1.92,-2.52);extPhys.quaternion.set(0,0,0,1);extPhys.velocity.setZero();extPhys.angularVelocity.setZero();
+    if(!extHanging){extConstraint=new CANNON.LockConstraint(extAnchor,extPhys,{maxForce:1200});world.addConstraint(extConstraint);extHanging=true;}
+  }
+  document.getElementById('reset').addEventListener('click',reset);
+
+  const clock=new THREE.Clock();
+  function animate(){requestAnimationFrame(animate);const dt=Math.min(.033,clock.getDelta());world.step(1/60,dt,3);
+    binGroup.position.copy(binPhys.position);binGroup.quaternion.copy(binPhys.quaternion);
+    extGroup.position.copy(extPhys.position);extGroup.quaternion.copy(extPhys.quaternion);
+    const now=performance.now();
+    for(let i=throws.length-1;i>=0;i--){const o=throws[i];o.m.position.copy(o.b.position);o.m.quaternion.copy(o.b.quaternion);
+      if(!o.scored){const dx=o.b.position.x-binPhys.position.x,dz=o.b.position.z-binPhys.position.z; if(dx*dx+dz*dz<(binR*.68)**2 && o.b.position.y>binPhys.position.y-.45 && o.b.position.y<binPhys.position.y+.52 && o.b.velocity.y<0){o.scored=true;hits++;score.textContent=`${hits} / ${attempts}`;}}
+      if(now-o.born>18000||o.b.position.y<-4){scene.remove(o.m);world.removeBody(o.b);throws.splice(i,1)}
+    }
+    if(charging)power.style.width=(Math.min(1,(now-chargeStart)/900)*100).toFixed(0)+'%';
+    controls.update();renderer.render(scene,camera);
+  }
+  animate();
+  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 }
-const texWall=cropTex(0,0,1024,400);
-const texFloor=cropTex(0,400,512,624);
-const texBin=cropTex(512,400,256,336);
-const texExt=cropTex(768,400,128,288);
-const texBox=cropTex(512,736,256,200);
-
-function mat(map,rough=.82,metal=.03){return new THREE.MeshStandardMaterial({map,roughness:rough,metalness:metal});}
-function meshBox(name,size,pos,material){const m=new THREE.Mesh(new THREE.BoxGeometry(...size),material);m.name=name;m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;scene.add(m);return m;}
-
-// PARED: textura fotográfica real en el paño superior, zócalo industrial debajo.
-const wall=meshBox('pared',[8.9,3.55,.16],[0,2.35,-2.72],mat(texWall,.94,0));
-const lower=meshBox('zócalo',[8.9,1.08,.17],[0,.54,-2.70],new THREE.MeshStandardMaterial({color:0x465348,roughness:.95}));
-const beam=meshBox('viga',[9.2,.22,.28],[0,4.18,-2.58],new THREE.MeshStandardMaterial({color:0x252a28,roughness:.72,metalness:.35}));
-// Paneles traslúcidos superiores, inspirados en la foto, sin la zunchadora.
-for(let i=-4;i<=4;i++){
-  const pane=meshBox('panel',[.94,1.12,.07],[i*.99,4.72,-2.68],new THREE.MeshStandardMaterial({color:0xb4b5ab,roughness:.55,metalness:.08,transparent:true,opacity:.72}));
-  const cross1=meshBox('costilla',[.025,1.27,.015],[i*.99,4.72,-2.59],new THREE.MeshStandardMaterial({color:0x77786f}));cross1.rotation.z=.68;
-  const cross2=meshBox('costilla',[.025,1.27,.015],[i*.99,4.72,-2.585],new THREE.MeshStandardMaterial({color:0x77786f}));cross2.rotation.z=-.68;
-}
-
-// PISO: textura extraída de la segunda foto + zonas amarillas/negras reconstruidas.
-const floorMat=mat(texFloor,.9,.02); texFloor.wrapS=texFloor.wrapT=THREE.MirroredRepeatWrapping; texFloor.repeat.set(2.3,2.3);
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(13,13),floorMat);floor.rotation.x=-Math.PI/2;floor.position.set(0,0,1);floor.receiveShadow=true;scene.add(floor);
-function stripeCanvas(){const c=document.createElement('canvas');c.width=512;c.height=128;const g=c.getContext('2d');g.fillStyle='#e1a500';g.fillRect(0,0,c.width,c.height);g.save();g.translate(-90,0);g.rotate(-Math.PI/5);g.fillStyle='#171815';for(let x=-100;x<700;x+=100)g.fillRect(x,-300,44,600);g.restore();const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
-const stripeMat=new THREE.MeshStandardMaterial({map:stripeCanvas(),roughness:.86});
-const band1=new THREE.Mesh(new THREE.PlaneGeometry(8.4,.72),stripeMat);band1.rotation.x=-Math.PI/2;band1.position.set(-.15,.012,3.25);band1.receiveShadow=true;scene.add(band1);
-const band2=new THREE.Mesh(new THREE.PlaneGeometry(.72,5.4),stripeMat);band2.rotation.x=-Math.PI/2;band2.rotation.z=Math.PI/2;band2.position.set(-3.78,.013,.2);band2.receiveShadow=true;scene.add(band2);
-
-// Caja azul de conexión: volumen 3D con la cara fotográfica de la referencia.
-const blueSide=new THREE.MeshStandardMaterial({color:0x1f5270,roughness:.75,metalness:.18});
-meshBox('caja azul',[1.18,.88,.27],[3.18,1.72,-2.39],blueSide);
-const boxFace=new THREE.Mesh(new THREE.PlaneGeometry(1.13,.82),new THREE.MeshStandardMaterial({map:texBox,roughness:.9}));
-boxFace.position.set(3.18,1.72,-2.245);scene.add(boxFace);
-const cableMat=new THREE.MeshStandardMaterial({color:0x181918,roughness:.65});
-const cableCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(3.48,2.14,-2.28),new THREE.Vector3(3.66,2.55,-2.35),new THREE.Vector3(3.66,3.08,-2.40)]);
-scene.add(new THREE.Mesh(new THREE.TubeGeometry(cableCurve,18,.035,8,false),cableMat));
-
-// Física
-const world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.82,0)});world.allowSleep=true;
-world.defaultContactMaterial.friction=.48;world.defaultContactMaterial.restitution=.18;
-const groundBody=new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Plane()});groundBody.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(groundBody);
-const wallBody=new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Box(new CANNON.Vec3(4.45,2.75,.08)),position:new CANNON.Vec3(0,2.75,-2.72)});world.addBody(wallBody);
-
-// Tacho: cilindro hueco compuesto, pivotando sobre un eje horizontal real.
-const binGroup=new THREE.Group();scene.add(binGroup);
-const binR=.56,binH=1.42;
-const binSideMat=new THREE.MeshStandardMaterial({map:texBin,color:0xffd232,roughness:.72,metalness:.18});
-const binMesh=new THREE.Mesh(new THREE.CylinderGeometry(binR,binR*.92,binH,40,1,true),binSideMat);binMesh.castShadow=true;binMesh.receiveShadow=true;binGroup.add(binMesh);
-const inner=new THREE.Mesh(new THREE.CylinderGeometry(binR*.91,binR*.88,binH*.96,40,1,true),new THREE.MeshStandardMaterial({color:0x5b4d20,side:THREE.BackSide,roughness:1}));binGroup.add(inner);
-const rim=new THREE.Mesh(new THREE.TorusGeometry(binR,.045,10,40),new THREE.MeshStandardMaterial({color:0xe1ad05,roughness:.65,metalness:.25}));rim.rotation.x=Math.PI/2;rim.position.y=binH/2;binGroup.add(rim);
-const bottom=new THREE.Mesh(new THREE.CylinderGeometry(binR*.9,binR*.9,.05,36),new THREE.MeshStandardMaterial({color:0x8c7314,roughness:.92}));bottom.position.y=-binH/2+.03;binGroup.add(bottom);
-const binBody=new CANNON.Body({mass:18,position:new CANNON.Vec3(.62,.94,-1.55),linearDamping:.22,angularDamping:.38});
-const segs=12,wallThick=.045,segW=2*Math.PI*binR/segs*.92;
-for(let i=0;i<segs;i++){const a=i*2*Math.PI/segs;const sh=new CANNON.Box(new CANNON.Vec3(segW/2,binH/2,wallThick));const off=new CANNON.Vec3(Math.sin(a)*(binR-wallThick),0,Math.cos(a)*(binR-wallThick));const q=new CANNON.Quaternion();q.setFromEuler(0,a,0);binBody.addShape(sh,off,q);}
-const bottomShape=new CANNON.Cylinder(binR*.9,binR*.9,.07,20);binBody.addShape(bottomShape,new CANNON.Vec3(0,-binH/2+.04,0));world.addBody(binBody);
-const axleBody=new CANNON.Body({type:CANNON.Body.STATIC,position:new CANNON.Vec3(.62,.72,-1.55)});world.addBody(axleBody);
-const hinge=new CANNON.HingeConstraint(axleBody,binBody,{pivotA:new CANNON.Vec3(0,0,0),axisA:new CANNON.Vec3(1,0,0),pivotB:new CANNON.Vec3(0,-.22,0),axisB:new CANNON.Vec3(1,0,0),collideConnected:false});world.addConstraint(hinge);
-// soporte negro del tacho
-const supportMat=new THREE.MeshStandardMaterial({color:0x1d201e,metalness:.48,roughness:.58});
-for(const x of [.62-binR-.12,.62+binR+.12]){meshBox('soporte',[.11,1.02,.15],[x,.51,-1.55],supportMat);const foot=meshBox('pie',[.23,.08,.54],[x,.04,-1.55],supportMat);}
-const axleVis=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,1.46,16),supportMat);axleVis.rotation.z=Math.PI/2;axleVis.position.set(.62,.72,-1.55);scene.add(axleVis);
-
-// Matafuegos: cuerpo físico dinámico colgado en una ménsula. Un golpe fuerte rompe el enganche.
-const extGroup=new THREE.Group();scene.add(extGroup);
-const extBodyVis=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.68,24),new THREE.MeshStandardMaterial({color:0xd42625,roughness:.58,metalness:.18}));extBodyVis.castShadow=true;extGroup.add(extBodyVis);
-const extFace=new THREE.Mesh(new THREE.PlaneGeometry(.34,.62),new THREE.MeshStandardMaterial({map:texExt,roughness:.85}));extFace.position.set(0,0,.176);extGroup.add(extFace);
-const valve=new THREE.Mesh(new THREE.BoxGeometry(.18,.09,.13),new THREE.MeshStandardMaterial({color:0x3a3b38,metalness:.55,roughness:.45}));valve.position.y=.39;extGroup.add(valve);
-const hoseCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(.08,.39,0),new THREE.Vector3(.26,.26,.02),new THREE.Vector3(.27,-.07,.03),new THREE.Vector3(.18,-.27,.02)]);
-extGroup.add(new THREE.Mesh(new THREE.TubeGeometry(hoseCurve,20,.023,7,false),new THREE.MeshStandardMaterial({color:0x191919,roughness:.7})));
-const extBody=new CANNON.Body({mass:4.5,position:new CANNON.Vec3(-3.0,1.45,-2.29),linearDamping:.04,angularDamping:.08});extBody.addShape(new CANNON.Cylinder(.17,.17,.68,16));world.addBody(extBody);
-const hook=new CANNON.Body({type:CANNON.Body.STATIC,position:new CANNON.Vec3(-3.0,1.80,-2.48)});world.addBody(hook);
-let extConstraint=new CANNON.PointToPointConstraint(hook,new CANNON.Vec3(0,0,0),extBody,new CANNON.Vec3(0,.35,0),1e6);world.addConstraint(extConstraint);
-const hazard=meshBox('placa matafuegos',[.86,1.22,.035],[-3.0,1.52,-2.59],new THREE.MeshStandardMaterial({color:0xe9e8de,roughness:.9}));
-function hazardCanvas(){const c=document.createElement('canvas');c.width=256;c.height=512;const g=c.getContext('2d');g.fillStyle='#eee9de';g.fillRect(0,0,256,512);g.strokeStyle='#c72e2e';g.lineWidth=34;for(let y=-250;y<700;y+=95){g.beginPath();g.moveTo(-50,y);g.lineTo(310,y+240);g.stroke();}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
-hazard.material.map=hazardCanvas();hazard.material.needsUpdate=true;
-let extBroken=false;
-function breakExt(){if(!extBroken){world.removeConstraint(extConstraint);extBroken=true;}}
-
-// Cola de objetos de prueba; preparada para sustituirse después por GLB.
-const thrown=[];let attempts=0,score=0,chargeStart=0,charging=false;
-const scoreEl=document.querySelector('#score'),powerEl=document.querySelector('#power');
-function updateScore(){scoreEl.textContent=`${score} / ${attempts}`;}
-function spawnThrow(power){
-  attempts++;updateScore();
-  const dir=new THREE.Vector3();camera.getWorldDirection(dir);
-  const start=camera.position.clone().add(dir.clone().multiplyScalar(.65));start.y-=.08;
-  const kinds=['sphere','cube','can'];const kind=kinds[attempts%kinds.length];
-  let mesh,shape;
-  if(kind==='sphere'){mesh=new THREE.Mesh(new THREE.SphereGeometry(.15,20,14),new THREE.MeshStandardMaterial({color:0xd9d6cd,roughness:.58}));shape=new CANNON.Sphere(.15);}
-  else if(kind==='cube'){mesh=new THREE.Mesh(new THREE.BoxGeometry(.24,.24,.24),new THREE.MeshStandardMaterial({color:0x627a91,roughness:.67}));shape=new CANNON.Box(new CANNON.Vec3(.12,.12,.12));}
-  else{mesh=new THREE.Mesh(new THREE.CylinderGeometry(.10,.10,.28,18),new THREE.MeshStandardMaterial({color:0xb8a98a,metalness:.25,roughness:.5}));shape=new CANNON.Cylinder(.1,.1,.28,14);}
-  mesh.castShadow=true;scene.add(mesh);
-  const body=new CANNON.Body({mass:kind==='sphere'?.35:.48,shape,position:new CANNON.Vec3(start.x,start.y,start.z),linearDamping:.01,angularDamping:.01});
-  const impulse=7.5+power*10.5;body.velocity.set(dir.x*impulse,dir.y*impulse+1.2,dir.z*impulse);body.angularVelocity.set((Math.random()-.5)*9,(Math.random()-.5)*9,(Math.random()-.5)*9);world.addBody(body);
-  body.addEventListener('collide',e=>{if(e.body===extBody){const iv=Math.abs(e.contact.getImpactVelocityAlongNormal());if(iv>1.2)breakExt();}});
-  thrown.push({mesh,body,scored:false,birth:performance.now()});
-}
-function pointerDown(e){if(e.button!==undefined&&e.button!==0)return;charging=true;chargeStart=performance.now();powerEl.style.width='0%';}
-function pointerUp(e){if(!charging)return;charging=false;const p=Math.min((performance.now()-chargeStart)/1350,1);powerEl.style.width='0%';spawnThrow(Math.max(.12,p));}
-renderer.domElement.addEventListener('pointerdown',pointerDown);
-addEventListener('pointerup',pointerUp);
-
-function sync(){
-  binGroup.position.copy(binBody.position);binGroup.quaternion.copy(binBody.quaternion);
-  extGroup.position.copy(extBody.position);extGroup.quaternion.copy(extBody.quaternion);
-  for(const o of thrown){o.mesh.position.copy(o.body.position);o.mesh.quaternion.copy(o.body.quaternion);}
-}
-function scoreCheck(){
-  const inv=binBody.quaternion.inverse();
-  for(const o of thrown){if(o.scored)continue;const rel=o.body.position.vsub(binBody.position);const local=inv.vmult(rel);const radial=Math.hypot(local.x,local.z);if(radial<binR*.72&&local.y>-binH*.43&&local.y<binH*.47&&o.body.velocity.length()<5.5){o.scored=true;score++;updateScore();}}
-}
-function resetPhysics(){
-  for(const o of thrown){world.removeBody(o.body);scene.remove(o.mesh);}thrown.length=0;attempts=score=0;updateScore();
-  binBody.position.set(.62,.94,-1.55);binBody.velocity.setZero();binBody.angularVelocity.setZero();binBody.quaternion.set(0,0,0,1);
-  extBody.position.set(-3.0,1.45,-2.29);extBody.velocity.setZero();extBody.angularVelocity.setZero();extBody.quaternion.set(0,0,0,1);
-  if(extBroken){extConstraint=new CANNON.PointToPointConstraint(hook,new CANNON.Vec3(0,0,0),extBody,new CANNON.Vec3(0,.35,0),1e6);world.addConstraint(extConstraint);extBroken=false;}
-}
-document.querySelector('#reset').onclick=resetPhysics;
-
-let last=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min((now-last)/1000,.033);last=now;world.step(1/60,dt,3);sync();scoreCheck();controls.update();if(charging){const p=Math.min((now-chargeStart)/1350,1);powerEl.style.width=(p*100)+'%';}for(let i=thrown.length-1;i>=0;i--){const o=thrown[i];if(o.body.position.y<-3||now-o.birth>30000){world.removeBody(o.body);scene.remove(o.mesh);thrown.splice(i,1);}}renderer.render(scene,camera);}requestAnimationFrame(loop);
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+main().catch(fail);
 </script>
 </body>
 </html>
