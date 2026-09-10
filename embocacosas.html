@@ -5,201 +5,192 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
 <title>Embocacosas en tacho</title>
 <style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#1b1d1c;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-canvas{display:block;touch-action:none}
-#hud{position:fixed;inset:0;pointer-events:none;z-index:5}
-#title{position:absolute;left:16px;top:13px;font-weight:900;letter-spacing:.04em;text-shadow:0 2px 8px #000}
-#sub{font-size:11px;font-weight:600;opacity:.72;letter-spacing:0;margin-top:2px}
-#score{position:absolute;right:16px;top:13px;background:#0009;border:1px solid #ffffff28;border-radius:11px;padding:8px 11px;font-weight:900;backdrop-filter:blur(6px)}
-#cross{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #0008}
-#cross:after{content:"";position:absolute;left:7px;top:7px;width:4px;height:4px;border-radius:50%;background:#fff}
-#hint{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);font-size:11px;background:#000a;border:1px solid #ffffff20;padding:6px 9px;border-radius:8px;white-space:nowrap}
-#powerShell{position:absolute;left:50%;bottom:27px;transform:translateX(-50%);height:12px;width:min(330px,72vw);border-radius:99px;background:#000c;border:1px solid #ffffff25;overflow:hidden}
-#power{width:0%;height:100%;background:linear-gradient(90deg,#76d66d,#ffd454,#ff5745)}
-#reset{pointer-events:auto;position:absolute;right:14px;bottom:14px;border:1px solid #ffffff2e;background:#111c;color:white;padding:8px 11px;border-radius:9px;font-weight:800;cursor:pointer}
-#error{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(620px,88vw);background:#220f0fe8;border:1px solid #ff8b8b66;padding:14px 16px;border-radius:12px;font-size:13px;line-height:1.35;pointer-events:auto}
-@media(max-width:650px){#title{font-size:13px}#sub{display:none}#hint{font-size:10px}.desktop{display:none}}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#202321;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+canvas{display:block}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:2}
+#title{position:absolute;left:16px;top:14px;font-weight:900;text-shadow:0 2px 8px #000}
+#status{position:absolute;left:16px;bottom:14px;background:#000a;border:1px solid #ffffff26;border-radius:9px;padding:7px 10px;font-size:12px;backdrop-filter:blur(5px)}
+#error{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(650px,88vw);padding:14px 16px;background:#2b1010e8;border:1px solid #ff777766;border-radius:12px;font-size:13px;line-height:1.4;pointer-events:auto}
 </style>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
-  }
-}
-</script>
 </head>
 <body>
-<div id="hud">
-  <div id="title">EMBOCACOSAS EN TACHO<div id="sub">prototipo de escena 3D · texmaps generados desde las fotos reales</div></div>
-  <div id="score">0 / 0</div>
-  <div id="cross"></div>
-  <div id="hint"><span class="desktop">Botón derecho: mirar · rueda: zoom · </span>Mantené click/touch y soltá para arrojar</div>
-  <div id="powerShell"><div id="power"></div></div>
-  <button id="reset">Reiniciar</button>
+<div id="ui">
+  <div id="title">EMBOCACOSAS EN TACHO</div>
+  <div id="status">Cargando escena 3D…</div>
   <div id="error"></div>
 </div>
 <script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm';
+import * as THREE from 'https://esm.sh/three@0.170.0';
+import { OrbitControls } from 'https://esm.sh/three@0.170.0/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 
 const AS='embocacosas-assets/';
+const status=document.getElementById('status');
 const errorBox=document.getElementById('error');
-function fail(e){console.error(e);errorBox.style.display='block';errorBox.textContent='Error cargando la escena 3D: '+(e?.message||e);}
+function showError(err){
+  console.error(err);
+  errorBox.style.display='block';
+  errorBox.textContent='No se pudo cargar la escena: '+(err?.message||err);
+  status.textContent='Error de carga';
+}
 
-async function main(){
+try{
   const scene=new THREE.Scene();
   scene.background=new THREE.Color(0x858985);
-  scene.fog=new THREE.Fog(0x858985,13,26);
 
-  const camera=new THREE.PerspectiveCamera(57,innerWidth/innerHeight,.05,80);
-  camera.position.set(.05,2.05,6.25);
+  const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.05,100);
+  camera.position.set(0.2,2.2,6.4);
 
   const renderer=new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
   renderer.setSize(innerWidth,innerHeight);
   renderer.shadowMap.enabled=true;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.05;
+  renderer.toneMappingExposure=1.1;
   document.body.prepend(renderer.domElement);
 
   const controls=new OrbitControls(camera,renderer.domElement);
-  controls.target.set(.25,1.2,-1.15);
-  controls.enableDamping=true; controls.dampingFactor=.06;
-  controls.minDistance=3.4; controls.maxDistance=9;
-  controls.minPolarAngle=.58; controls.maxPolarAngle=1.48;
-  controls.mouseButtons={LEFT:null,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};
-  controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};
+  controls.target.set(0.3,1.4,-1.1);
+  controls.enableDamping=true;
+  controls.dampingFactor=0.06;
+  controls.minDistance=3.2;
+  controls.maxDistance=10;
+  controls.maxPolarAngle=Math.PI*0.49;
 
-  scene.add(new THREE.HemisphereLight(0xf2f4ef,0x494a45,1.65));
-  const sun=new THREE.DirectionalLight(0xfff2d8,2.3); sun.position.set(-3,6,5); sun.castShadow=true;
-  sun.shadow.mapSize.set(1536,1536); sun.shadow.camera.left=-6; sun.shadow.camera.right=6; sun.shadow.camera.top=7; sun.shadow.camera.bottom=-3; scene.add(sun);
-  const fill=new THREE.PointLight(0xe6efff,18,11,2); fill.position.set(3.5,3.2,2.8); scene.add(fill);
+  scene.add(new THREE.HemisphereLight(0xf4f4ed,0x4c4e49,2.0));
+  const key=new THREE.DirectionalLight(0xfff0d3,2.4);
+  key.position.set(-3,6,5);
+  key.castShadow=true;
+  key.shadow.mapSize.set(2048,2048);
+  scene.add(key);
+  const fill=new THREE.PointLight(0xdde9ff,18,14,2);
+  fill.position.set(4,3.5,3);
+  scene.add(fill);
 
-  const loader=new THREE.TextureLoader();
-  const load=async name=>{const t=await loader.loadAsync(AS+name);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t};
-  const [wallTex,floorTex,boxTex,binAtlas,extAtlas]=await Promise.all([
-    load('wall.jpg'),load('floor.jpg'),load('box.jpg'),load('bin_atlas.jpg'),load('extinguisher_atlas.jpg')
+  const texLoader=new THREE.TextureLoader();
+  const loadTexture=(name)=>new Promise((resolve,reject)=>{
+    texLoader.load(AS+name,(t)=>{
+      t.colorSpace=THREE.SRGBColorSpace;
+      t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+      resolve(t);
+    },undefined,reject);
+  });
+
+  const [wallTex,floorTex,boxTex,binTex]=await Promise.all([
+    loadTexture('wall.jpg'),
+    loadTexture('floor.jpg'),
+    loadTexture('box.jpg'),
+    loadTexture('bin_atlas.jpg')
   ]);
 
-  function cropTexture(src,u,v,w,h,outW=1024,outH=512){
-    const img=src.image,c=document.createElement('canvas');c.width=outW;c.height=outH;
-    const g=c.getContext('2d');
-    g.drawImage(img,u*img.width,v*img.height,w*img.width,h*img.height,0,0,outW,outH);
-    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t;
-  }
-  const binWrap=cropTexture(binAtlas,0.00,0.00,0.77,0.58,1024,512);
-  binWrap.wrapS=THREE.RepeatWrapping;
-  const extWrap=cropTexture(extAtlas,0.00,0.23,1.00,0.56,1024,512);
-  extWrap.wrapS=THREE.RepeatWrapping;
+  const wall=new THREE.Mesh(
+    new THREE.PlaneGeometry(9.6,7.2),
+    new THREE.MeshStandardMaterial({map:wallTex,roughness:0.95,metalness:0})
+  );
+  wall.position.set(0,3.6,-3.0);
+  wall.receiveShadow=true;
+  scene.add(wall);
 
-  const std=(map,rough=.86,metal=.02,extra={})=>new THREE.MeshStandardMaterial({map,roughness:rough,metalness:metal,...extra});
-  const box=(size,pos,mat)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(...size),mat);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;scene.add(m);return m};
+  const floor=new THREE.Mesh(
+    new THREE.PlaneGeometry(11.5,11.5),
+    new THREE.MeshStandardMaterial({map:floorTex,roughness:0.92,metalness:0.02})
+  );
+  floor.rotation.x=-Math.PI/2;
+  floor.position.set(0,0,1.4);
+  floor.receiveShadow=true;
+  scene.add(floor);
 
-  const wallMat=std(wallTex,.96,0);
-  const wall=new THREE.Mesh(new THREE.PlaneGeometry(9.5,7.125),wallMat);
-  wall.position.set(0,3.56,-2.83); wall.receiveShadow=true; scene.add(wall);
+  const boxBody=new THREE.Mesh(
+    new THREE.BoxGeometry(1.15,0.9,0.28),
+    new THREE.MeshStandardMaterial({color:0x155f87,roughness:0.75,metalness:0.2})
+  );
+  boxBody.position.set(3.15,1.75,-2.72);
+  boxBody.castShadow=true;
+  scene.add(boxBody);
 
-  floorTex.wrapS=floorTex.wrapT=THREE.ClampToEdgeWrapping;
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(11.5,11.5),std(floorTex,.92,.02));
-  floor.rotation.x=-Math.PI/2; floor.rotation.z=Math.PI; floor.position.set(0,0,1.35); floor.receiveShadow=true; scene.add(floor);
+  const boxFront=new THREE.Mesh(
+    new THREE.PlaneGeometry(1.08,0.82),
+    new THREE.MeshStandardMaterial({map:boxTex,roughness:0.85,metalness:0.03})
+  );
+  boxFront.position.set(3.15,1.75,-2.57);
+  scene.add(boxFront);
 
-  const blue=new THREE.MeshStandardMaterial({color:0x185982,roughness:.74,metalness:.25});
-  box([1.18,.88,.28],[3.15,1.72,-2.58],blue);
-  const bf=new THREE.Mesh(new THREE.PlaneGeometry(1.12,.82),std(boxTex,.87,.04));bf.position.set(3.15,1.72,-2.435);scene.add(bf);
-  const lock=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.035,20),new THREE.MeshStandardMaterial({color:0x202322,metalness:.7,roughness:.4}));lock.rotation.x=Math.PI/2;lock.position.set(3.48,1.62,-2.405);scene.add(lock);
-  const cableCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(3.48,2.15,-2.53),new THREE.Vector3(3.67,2.62,-2.45),new THREE.Vector3(3.63,3.15,-2.43)]);
-  scene.add(new THREE.Mesh(new THREE.TubeGeometry(cableCurve,24,.032,8,false),new THREE.MeshStandardMaterial({color:0x111211,roughness:.75})));
+  const lock=new THREE.Mesh(
+    new THREE.CylinderGeometry(0.055,0.055,0.035,20),
+    new THREE.MeshStandardMaterial({color:0x222222,metalness:0.7,roughness:0.4})
+  );
+  lock.rotation.x=Math.PI/2;
+  lock.position.set(3.48,1.62,-2.54);
+  scene.add(lock);
 
-  const steel=new THREE.MeshStandardMaterial({color:0x202321,roughness:.62,metalness:.48});
-  const binX=.62, binZ=-1.55, binR=.56, binH=1.42, axleY=.72;
-  for(const x of [binX-binR-.12,binX+binR+.12]){
-    box([.105,1.03,.15],[x,.515,binZ],steel); box([.27,.08,.58],[x,.04,binZ],steel);
-  }
-  const axleMesh=new THREE.Mesh(new THREE.CylinderGeometry(.065,.065,1.52,18),steel);axleMesh.rotation.z=Math.PI/2;axleMesh.position.set(binX,axleY,binZ);scene.add(axleMesh);
+  const gltfLoader=new GLTFLoader();
+  status.textContent='Cargando tacho.glb…';
+  const gltf=await gltfLoader.loadAsync(AS+'tacho.glb');
+  const tacho=gltf.scene;
 
-  const world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.82,0)});world.allowSleep=true;
-  world.defaultContactMaterial.friction=.5;world.defaultContactMaterial.restitution=.2;
-  const ground=new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Plane()});ground.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(ground);
-  world.addBody(new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Box(new CANNON.Vec3(4.75,3.5,.08)),position:new CANNON.Vec3(0,3.5,-2.84)}));
-
-  const binGroup=new THREE.Group();scene.add(binGroup);
-  const bodyMesh=new THREE.Mesh(new THREE.CylinderGeometry(binR,binR*.94,binH,40,1,true),std(binWrap,.7,.16));bodyMesh.castShadow=true;bodyMesh.receiveShadow=true;binGroup.add(bodyMesh);
-  const inner=new THREE.Mesh(new THREE.CylinderGeometry(binR*.91,binR*.87,binH*.97,40,1,true),new THREE.MeshStandardMaterial({color:0x5a4c25,side:THREE.BackSide,roughness:1}));binGroup.add(inner);
-  const rimMat=new THREE.MeshStandardMaterial({color:0xc89300,roughness:.62,metalness:.3});
-  const rim=new THREE.Mesh(new THREE.TorusGeometry(binR,.042,10,40),rimMat);rim.rotation.x=Math.PI/2;rim.position.y=binH/2;binGroup.add(rim);
-  const binPhys=new CANNON.Body({mass:16,position:new CANNON.Vec3(binX,.94,binZ),linearDamping:.2,angularDamping:.35});
-  const segs=16,th=.035,segW=2*Math.PI*binR/segs*.88;
-  for(let i=0;i<segs;i++){
-    const a=i*2*Math.PI/segs,q=new CANNON.Quaternion();q.setFromEuler(0,a,0);
-    binPhys.addShape(new CANNON.Box(new CANNON.Vec3(segW/2,binH/2,th)),new CANNON.Vec3(Math.sin(a)*(binR-th),0,Math.cos(a)*(binR-th)),q);
-  }
-  binPhys.addShape(new CANNON.Cylinder(binR*.88,binR*.88,.055,24),new CANNON.Vec3(0,-binH/2+.035,0));world.addBody(binPhys);
-  const axle=new CANNON.Body({type:CANNON.Body.STATIC,position:new CANNON.Vec3(binX,axleY,binZ)});world.addBody(axle);
-  world.addConstraint(new CANNON.HingeConstraint(axle,binPhys,{pivotA:new CANNON.Vec3(),axisA:new CANNON.Vec3(1,0,0),pivotB:new CANNON.Vec3(0,-.22,0),axisB:new CANNON.Vec3(1,0,0),collideConnected:false}));
-
-  const extGroup=new THREE.Group();scene.add(extGroup);
-  const extCylinder=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.73,28,1,true),std(extWrap,.63,.14));extCylinder.castShadow=true;extGroup.add(extCylinder);
-  const extTop=new THREE.Mesh(new THREE.SphereGeometry(.18,24,12,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0xb91e1d,roughness:.63,metalness:.12}));extTop.position.y=.365;extGroup.add(extTop);
-  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.13,16),new THREE.MeshStandardMaterial({color:0x8f744f,roughness:.48,metalness:.62}));neck.position.y=.48;extGroup.add(neck);
-  const handle= new THREE.Mesh(new THREE.BoxGeometry(.28,.045,.055),new THREE.MeshStandardMaterial({color:0x282a28,roughness:.48,metalness:.62}));handle.position.set(.07,.57,0);handle.rotation.z=-.15;extGroup.add(handle);
-  const hoseCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(.12,.48,0),new THREE.Vector3(.28,.3,.02),new THREE.Vector3(.25,.03,.04),new THREE.Vector3(.18,-.18,.06)]);
-  extGroup.add(new THREE.Mesh(new THREE.TubeGeometry(hoseCurve,20,.022,8,false),new THREE.MeshStandardMaterial({color:0x171817,roughness:.78})));
-  extGroup.position.set(-2.6,1.92,-2.52);
-  box([.42,.06,.12],[-2.6,2.24,-2.65],steel);
-  const extPhys=new CANNON.Body({mass:5,shape:new CANNON.Cylinder(.18,.18,.73,16),position:new CANNON.Vec3(-2.6,1.92,-2.52),linearDamping:.15,angularDamping:.18});world.addBody(extPhys);
-  const extAnchor=new CANNON.Body({type:CANNON.Body.STATIC,position:new CANNON.Vec3(-2.6,2.26,-2.56)});world.addBody(extAnchor);
-  let extConstraint=new CANNON.LockConstraint(extAnchor,extPhys,{maxForce:1200});world.addConstraint(extConstraint);
-  let extHanging=true;
-  extPhys.addEventListener('collide',ev=>{if(extHanging && ev.contact.getImpactVelocityAlongNormal()>3.1){world.removeConstraint(extConstraint);extHanging=false;}});
-
-  const throws=[]; let attempts=0,hits=0,charging=false,chargeStart=0;
-  const score=document.getElementById('score'),power=document.getElementById('power');
-  function spawnThrow(){
-    const isBox=Math.random()<.5;
-    const geo=isBox?new THREE.BoxGeometry(.22,.22,.22):new THREE.SphereGeometry(.14,18,12);
-    const mat=new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(Math.random(),.52,.55),roughness:.62});
-    const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;scene.add(m);
-    const shape=isBox?new CANNON.Box(new CANNON.Vec3(.11,.11,.11)):new CANNON.Sphere(.14);
-    const b=new CANNON.Body({mass:.65,shape,linearDamping:.02,angularDamping:.04});world.addBody(b);
-    const dir=new THREE.Vector3();camera.getWorldDirection(dir);const start=camera.position.clone().add(dir.clone().multiplyScalar(.52)).add(new THREE.Vector3(0,-.16,0));
-    b.position.set(start.x,start.y,start.z);
-    const held=Math.min(1.65,(performance.now()-chargeStart)/900),speed=5.8+held*8.5;
-    b.velocity.set(dir.x*speed,dir.y*speed+1.25,dir.z*speed);b.angularVelocity.set((Math.random()-.5)*10,(Math.random()-.5)*10,(Math.random()-.5)*10);
-    throws.push({m,b,scored:false,born:performance.now()});attempts++;score.textContent=`${hits} / ${attempts}`;
-  }
-  function pointerDown(e){if(e.button!==undefined&&e.button!==0)return;charging=true;chargeStart=performance.now();}
-  function pointerUp(){if(!charging)return;charging=false;spawnThrow();power.style.width='0%';}
-  renderer.domElement.addEventListener('pointerdown',pointerDown);window.addEventListener('pointerup',pointerUp);
-  renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
-
-  function reset(){
-    for(const o of throws){scene.remove(o.m);world.removeBody(o.b)}throws.length=0;attempts=hits=0;score.textContent='0 / 0';
-    binPhys.position.set(binX,.94,binZ);binPhys.quaternion.set(0,0,0,1);binPhys.velocity.setZero();binPhys.angularVelocity.setZero();
-    extPhys.position.set(-2.6,1.92,-2.52);extPhys.quaternion.set(0,0,0,1);extPhys.velocity.setZero();extPhys.angularVelocity.setZero();
-    if(!extHanging){extConstraint=new CANNON.LockConstraint(extAnchor,extPhys,{maxForce:1200});world.addConstraint(extConstraint);extHanging=true;}
-  }
-  document.getElementById('reset').addEventListener('click',reset);
-
-  const clock=new THREE.Clock();
-  function animate(){requestAnimationFrame(animate);const dt=Math.min(.033,clock.getDelta());world.step(1/60,dt,3);
-    binGroup.position.copy(binPhys.position);binGroup.quaternion.copy(binPhys.quaternion);
-    extGroup.position.copy(extPhys.position);extGroup.quaternion.copy(extPhys.quaternion);
-    const now=performance.now();
-    for(let i=throws.length-1;i>=0;i--){const o=throws[i];o.m.position.copy(o.b.position);o.m.quaternion.copy(o.b.quaternion);
-      if(!o.scored){const dx=o.b.position.x-binPhys.position.x,dz=o.b.position.z-binPhys.position.z; if(dx*dx+dz*dz<(binR*.68)**2 && o.b.position.y>binPhys.position.y-.45 && o.b.position.y<binPhys.position.y+.52 && o.b.velocity.y<0){o.scored=true;hits++;score.textContent=`${hits} / ${attempts}`;}}
-      if(now-o.born>18000||o.b.position.y<-4){scene.remove(o.m);world.removeBody(o.b);throws.splice(i,1)}
+  let meshCount=0;
+  tacho.traverse((o)=>{
+    if(!o.isMesh) return;
+    meshCount++;
+    o.castShadow=true;
+    o.receiveShadow=true;
+    if(o.geometry?.attributes?.uv){
+      o.material=new THREE.MeshStandardMaterial({map:binTex,roughness:0.72,metalness:0.14});
+    }else{
+      o.material=new THREE.MeshStandardMaterial({color:0xd9a400,roughness:0.72,metalness:0.14});
     }
-    if(charging)power.style.width=(Math.min(1,(now-chargeStart)/900)*100).toFixed(0)+'%';
-    controls.update();renderer.render(scene,camera);
+  });
+
+  scene.add(tacho);
+
+  const bounds=new THREE.Box3().setFromObject(tacho);
+  const size=new THREE.Vector3();
+  const center=new THREE.Vector3();
+  bounds.getSize(size);
+  bounds.getCenter(center);
+
+  if(size.y>0){
+    const targetHeight=1.45;
+    const scale=targetHeight/size.y;
+    tacho.scale.setScalar(scale);
+    tacho.updateMatrixWorld(true);
+
+    const fitted=new THREE.Box3().setFromObject(tacho);
+    const fittedCenter=new THREE.Vector3();
+    fitted.getCenter(fittedCenter);
+    tacho.position.x += 0.55-fittedCenter.x;
+    tacho.position.z += -1.6-fittedCenter.z;
+    tacho.updateMatrixWorld(true);
+
+    const grounded=new THREE.Box3().setFromObject(tacho);
+    tacho.position.y += -grounded.min.y;
+  }
+
+  const grid=new THREE.GridHelper(11,22,0x000000,0x444444);
+  grid.position.y=0.006;
+  grid.material.opacity=0.06;
+  grid.material.transparent=true;
+  scene.add(grid);
+
+  status.textContent=`Escena cargada · tacho.glb: ${meshCount} mesh${meshCount===1?'':'es'}`;
+
+  function animate(){
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene,camera);
   }
   animate();
-  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+
+  addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+  });
+}catch(err){
+  showError(err);
 }
-main().catch(fail);
 </script>
 </body>
 </html>
