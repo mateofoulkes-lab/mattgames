@@ -278,14 +278,9 @@ const scoreEl=document.getElementById('score');
 function score(){scoreEl.textContent=hits+' / '+attempts;}
 
 function randomSpec(typeIndex){
-  // Mucha más variación visible de tamaño.
   const scale=THREE.MathUtils.lerp(.42,1.90,Math.random());
-
-  // Y además la densidad/peso varía independientemente del tamaño:
-  // un objeto chico puede ser sorprendentemente pesado y viceversa.
   const density=THREE.MathUtils.lerp(.45,2.20,Math.random());
   const mass=TYPES[typeIndex].mass*Math.pow(scale,3)*density;
-
   return {typeIndex,scale,density,mass};
 }
 
@@ -344,8 +339,6 @@ function refreshPreview(){
   const v=makeVisual(nextSpec,true);
   previewObject=v.mesh;
 
-  // El objeto ocupa exactamente la base/origen de la flecha.
-  // Se limita visualmente para que uno gigante no tape media pantalla.
   const maxPreview=.13;
   const visR=Math.max(.001,v.radius);
   if(visR>maxPreview){
@@ -397,7 +390,19 @@ function spawnProjectile(spec,dir,speed){
 }
 
 function currentAimDir(){
-  return new THREE.Vector3(0,0,-1).applyQuaternion(getAimQuaternion()).normalize();
+  // La dirección de disparo se calcula a partir de la flecha TAL COMO SE VE
+  // desde la cámara. Antes usábamos el yaw local completo de la flecha:
+  // como la flecha está casi 1 m delante de la cámara, visualmente parecía
+  // apuntar menos hacia afuera de lo que realmente disparaba.
+  // Tomando cámara -> punta, el ángulo proyectado y el tiro coinciden.
+  placeArrow();
+  arrowRoot.updateMatrixWorld(true);
+  if(arrowTip){
+    const tipWorld=new THREE.Vector3();
+    arrowTip.getWorldPosition(tipWorld);
+    return tipWorld.sub(camera.position).normalize();
+  }
+  return new THREE.Vector3(0,0,-1).applyQuaternion(arrowRoot.quaternion).normalize();
 }
 
 function fire(){
@@ -487,9 +492,7 @@ function collideOuterBinWall(p,info){
   if(dist<1e-5)return;
 
   const contactR=info.outerR+p.radius;
-  const inWallHeight=
-    q.y<info.topY-p.radius*.18 &&
-    q.y>info.bottomY+p.radius*.20;
+  const inWallHeight=q.y<info.topY-p.radius*.18 && q.y>info.bottomY+p.radius*.20;
 
   if(inWallHeight && dist<contactR){
     const nx=dx/dist,nz=dz/dist;
@@ -626,8 +629,6 @@ function updateProjectiles(dt){
     const p=projectiles[i];
     p.age+=dt;
 
-    // Piso del GLB con rebote explícito. La pared de atrás usa ahora
-    // un collider físico invisible independiente de las normales del mesh.
     if(floorBox)collideAABBProjectile(p,floorBox,.34);
 
     hitSpecials(p);
