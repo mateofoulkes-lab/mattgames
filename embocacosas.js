@@ -47,7 +47,7 @@ world.addBody(ground);
 let tacho=null,tachoBaseQuat=null,tachoAngle=0,tachoAV=0;
 let floorObj=null,wallObj=null,electricalObj=null,extinguisherObj=null;
 let floorBox=null,wallBox=null,electricalBox=null,extinguisherBox=null;
-let backWallBody=null;
+let backWallBody=null,electricalBody=null;
 let extinguisherFalling=false,extinguisherExploded=false;
 let extVel=new THREE.Vector3(), extAV=new THREE.Vector3();
 
@@ -55,6 +55,31 @@ function findByRegex(root,re){
   const hits=[];
   root.traverse(o=>{if(o.name && re.test(o.name)) hits.push(o);});
   return hits.find(o=>o.isMesh||o.children.length)||hits[0]||null;
+}
+
+function findElectricalObject(root){
+  const byName=findByRegex(root,/electr|tablero|panel|caja|box|gabinete|cabinet|switch|breaker|control/i);
+  if(byName)return byName;
+
+  // Fallback: busca un mesh azul/celeste compacto. Así no dependemos del nombre de Blender.
+  const candidates=[];
+  root.traverse(o=>{
+    if(!o.isMesh)return;
+    const mats=Array.isArray(o.material)?o.material:[o.material];
+    let blueScore=0;
+    for(const m of mats){
+      const c=m?.color;
+      if(c && c.b>c.r*1.12 && c.b>c.g*1.02) blueScore=Math.max(blueScore,c.b-c.r);
+    }
+    if(blueScore<=0)return;
+    const b=boxOf(o);
+    const size=new THREE.Vector3();
+    b.getSize(size);
+    const volume=size.x*size.y*size.z;
+    if(volume>.0005 && Math.max(size.x,size.y,size.z)<4) candidates.push({o,score:blueScore+Math.min(volume,.5)});
+  });
+  candidates.sort((a,b)=>b.score-a.score);
+  return candidates[0]?.o||null;
 }
 
 function boxOf(o){
@@ -75,7 +100,7 @@ loader.load(AS+'escena.glb'+CACHE_BUST,g=>{
 
   floorObj=findByRegex(g.scene,/piso|floor|suelo|ground/i);
   wallObj=findByRegex(g.scene,/pared|wall|muro/i);
-  electricalObj=findByRegex(g.scene,/electr|tablero|panel|caja.*(azul|elect)/i);
+  electricalObj=findElectricalObject(g.scene);
   extinguisherObj=findByRegex(g.scene,/mataf|exting|extintor|fire.?ext/i);
 
   floorBox=boxOf(floorObj);
@@ -100,6 +125,22 @@ loader.load(AS+'escena.glb'+CACHE_BUST,g=>{
       position:new CANNON.Vec3(wc.x,wc.y,wc.z)
     });
     world.addBody(backWallBody);
+  }
+
+  // Collider físico real para la caja eléctrica.
+  if(electricalBox){
+    const es=new THREE.Vector3(),ec=new THREE.Vector3();
+    electricalBox.getSize(es);electricalBox.getCenter(ec);
+    electricalBody=new CANNON.Body({
+      type:CANNON.Body.STATIC,
+      shape:new CANNON.Box(new CANNON.Vec3(
+        Math.max(.035,es.x*.5),
+        Math.max(.035,es.y*.5),
+        Math.max(.035,es.z*.5)
+      )),
+      position:new CANNON.Vec3(ec.x,ec.y,ec.z)
+    });
+    world.addBody(electricalBody);
   }
 });
 
@@ -274,14 +315,27 @@ const TYPES=[
   {name:'DONA',mass:1.25,color:0xf3c64f}
 ];
 
+const MATERIALS=[
+  {name:'TELGOPOR',density:.28,metalness:0,roughness:.78},
+  {name:'PLÁSTICO',density:.55,metalness:0,roughness:.48},
+  {name:'MADERA',density:.82,metalness:0,roughness:.72},
+  {name:'ALUMINIO',density:1.25,metalness:.72,roughness:.28},
+  {name:'ACERO',density:1.90,metalness:.88,roughness:.22},
+  {name:'PLOMO',density:2.65,metalness:.55,roughness:.42}
+];
+
 const scoreEl=document.getElementById('score');
 function score(){scoreEl.textContent=hits+' / '+attempts;}
 
 function randomSpec(typeIndex){
   const scale=THREE.MathUtils.lerp(.42,1.90,Math.random());
-  const density=THREE.MathUtils.lerp(.45,2.20,Math.random());
+  const material=MATERIALS[Math.floor(Math.random()*MATERIALS.length)];
+
+  // El peso ya no es un random abstracto: sale del material elegido y del volumen.
+  const density=material.density;
   const mass=TYPES[typeIndex].mass*Math.pow(scale,3)*density;
-  return {typeIndex,scale,density,mass};
+
+  return {typeIndex,scale,density,mass,material};
 }
 
 let nextSpec=randomSpec(nextType);
@@ -308,7 +362,8 @@ function makeVisual(spec,preview=false){
     geom,
     new THREE.MeshStandardMaterial({
       color:TYPES[typeIndex].color,
-      roughness:.58,
+      roughness:spec.material?.roughness??.58,
+      metalness:spec.material?.metalness??0,
       transparent:preview,
       opacity:preview?.92:1
     })
@@ -339,14 +394,15 @@ function refreshPreview(){
   const v=makeVisual(nextSpec,true);
   previewObject=v.mesh;
 
-  const maxPreview=.13;
-  const visR=Math.max(.001,v.radius);
-  if(visR>maxPreview){
-    previewObject.scale.setScalar(maxPreview/visR);
-  }
-
+  // Preview informativo: representa forma/material, pero mide sólo 25% del objeto real.
+  previewObject.scale.setScalar(.25);
   previewObject.position.set(0,0,.035);
   arrowRoot.add(previewObject);
+
+  const info=document.getElementById('nextInfo');
+  if(info){
+    info.textContent=`PRÓXIMO: ${TYPES[nextSpec.typeIndex].name} · ${nextSpec.material.name}`;
+  }
 }
 refreshPreview();
 
@@ -378,6 +434,7 @@ function spawnProjectile(spec,dir,speed){
     radius,
     scale:spec.scale,
     density:spec.density,
+    materialName:spec.material.name,
     scored:false,
     enteredThroughMouth:false,
     lockedIn:false,
@@ -390,11 +447,6 @@ function spawnProjectile(spec,dir,speed){
 }
 
 function currentAimDir(){
-  // La dirección de disparo se calcula a partir de la flecha TAL COMO SE VE
-  // desde la cámara. Antes usábamos el yaw local completo de la flecha:
-  // como la flecha está casi 1 m delante de la cámara, visualmente parecía
-  // apuntar menos hacia afuera de lo que realmente disparaba.
-  // Tomando cámara -> punta, el ángulo proyectado y el tiro coinciden.
   placeArrow();
   arrowRoot.updateMatrixWorld(true);
   if(arrowTip){
@@ -567,16 +619,15 @@ function reinforceInsideBin(p,info){
 function hitSpecials(p){
   const q=new THREE.Vector3(p.body.position.x,p.body.position.y,p.body.position.z);
 
-  if(electricalObj && !p.electricalHit){
-    electricalBox=boxOf(electricalObj);
+  if(electricalBox && (p.electricalCooldown||0)<=0){
+    // Caja sólida + chispazo en el contacto.
     if(expanded(electricalBox,p.radius).containsPoint(q)){
       p.electricalHit=true;
+      p.electricalCooldown=.14;
       const c=new THREE.Vector3();
       electricalBox.getCenter(c);
-      electricBurst(q.clone().lerp(c,.35));
-      p.body.velocity.multiplyScalar(.55);
-      p.body.velocity.x*=-.7;
-      p.body.velocity.z*=-.7;
+      electricBurst(q.clone().lerp(c,.20));
+      collideAABBProjectile(p,electricalBox,.62);
     }
   }
 
@@ -608,6 +659,26 @@ function updateExtinguisher(dt){
 
   extinguisherBox=boxOf(extinguisherObj);
 
+  // El matafuegos también choca contra el collider invisible de la pared.
+  if(wallBox && extinguisherBox.intersectsBox(wallBox)){
+    const ec=new THREE.Vector3(),wc=new THREE.Vector3();
+    extinguisherBox.getCenter(ec);wallBox.getCenter(wc);
+    const ws=new THREE.Vector3();wallBox.getSize(ws);
+
+    // Resolvemos sobre el eje más fino de la pared, que es su normal física.
+    let axis='x';
+    if(ws.y<ws.x && ws.y<ws.z)axis='y';
+    else if(ws.z<ws.x && ws.z<ws.y)axis='z';
+
+    const eSize=new THREE.Vector3();extinguisherBox.getSize(eSize);
+    const sign=(ec[axis]-wc[axis])>=0?1:-1;
+    const target=wc[axis]+sign*(ws[axis]*.5+eSize[axis]*.5+.01);
+    extinguisherObj.position[axis]+=target-ec[axis];
+    extVel[axis]*=-.42;
+    extAV.multiplyScalar(.86);
+    extinguisherBox=boxOf(extinguisherObj);
+  }
+
   let floorY=0;
   if(floorBox)floorY=floorBox.max.y;
 
@@ -628,7 +699,10 @@ function updateProjectiles(dt){
   for(let i=projectiles.length-1;i>=0;i--){
     const p=projectiles[i];
     p.age+=dt;
+    p.electricalCooldown=Math.max(0,(p.electricalCooldown||0)-dt);
 
+    // Piso del GLB con rebote explícito. La pared de atrás usa ahora
+    // un collider físico invisible independiente de las normales del mesh.
     if(floorBox)collideAABBProjectile(p,floorBox,.34);
 
     hitSpecials(p);
