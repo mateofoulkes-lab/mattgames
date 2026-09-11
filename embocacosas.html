@@ -10,13 +10,15 @@ canvas{display:block;touch-action:none}
 #hud{position:fixed;inset:0;pointer-events:none;z-index:20}
 #title{position:absolute;left:14px;top:12px;font-weight:900;text-shadow:0 2px 8px #000}
 #score{position:absolute;right:14px;top:12px;background:#000a;border:1px solid #ffffff2a;border-radius:10px;padding:8px 11px;font-weight:900}
-#status{position:absolute;left:14px;bottom:14px;background:#000b;border:1px solid #ffffff22;border-radius:9px;padding:8px 10px;font-size:11px;white-space:pre-line;max-width:min(620px,85vw)}
-#cross{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #0008}
-#cross:after{content:"";position:absolute;left:7px;top:7px;width:4px;height:4px;border-radius:50%;background:#fff}
-#hint{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);background:#000a;padding:6px 9px;border-radius:8px;font-size:11px;white-space:nowrap}
-#powerShell{position:absolute;left:50%;bottom:29px;transform:translateX(-50%);width:min(330px,72vw);height:11px;border-radius:99px;overflow:hidden;background:#000b;border:1px solid #ffffff33}
-#power{height:100%;width:0%;background:linear-gradient(90deg,#7edb77,#ffd453,#ff5b49)}
-#next{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);font-size:12px;font-weight:800;text-shadow:0 2px 6px #000}
+#hint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);background:#000a;padding:7px 10px;border-radius:8px;font-size:11px;white-space:nowrap}
+#editorToggle{pointer-events:auto;position:absolute;left:14px;bottom:14px;border:1px solid #ffffff33;background:#111d;color:#fff;border-radius:9px;padding:8px 10px;font-weight:800;cursor:pointer}
+#editor{pointer-events:auto;display:none;position:absolute;left:14px;top:55px;width:min(360px,88vw);background:#111e;border:1px solid #ffffff2a;border-radius:12px;padding:12px;backdrop-filter:blur(8px)}
+#editor.show{display:block}
+#editor h3{margin:0 0 8px;font-size:14px}
+#editor .row{display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center;margin:6px 0}
+#editor input{width:100%;box-sizing:border-box;background:#222;color:#fff;border:1px solid #ffffff22;border-radius:7px;padding:6px}
+#editor button{border:1px solid #ffffff2a;background:#252525;color:#fff;border-radius:8px;padding:7px 9px;font-weight:700;cursor:pointer;margin-right:6px;margin-top:8px}
+#cameraOut{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;white-space:pre-wrap;background:#0008;border-radius:8px;padding:8px;margin-top:8px}
 @media(max-width:650px){#title{font-size:13px}#hint{font-size:10px}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
@@ -25,11 +27,20 @@ canvas{display:block;touch-action:none}
 <div id="hud">
   <div id="title">EMBOCACOSAS EN TACHO</div>
   <div id="score">0 / 0</div>
-  <div id="cross"></div>
-  <div id="next"></div>
-  <div id="hint">Mantené click/touch para cargar · soltá para tirar · botón derecho para mirar</div>
-  <div id="powerShell"><div id="power"></div></div>
-  <div id="status">Cargando escena…</div>
+  <div id="hint">La flecha barre sola · mantené presionado para cargar · soltá para tirar</div>
+  <button id="editorToggle">EDITOR CÁMARA</button>
+  <div id="editor">
+    <h3>Editor de cámara</h3>
+    <div class="row"><label>X</label><input id="cx" type="number" step="0.01"></div>
+    <div class="row"><label>Y</label><input id="cy" type="number" step="0.01"></div>
+    <div class="row"><label>Z</label><input id="cz" type="number" step="0.01"></div>
+    <div class="row"><label>Target X</label><input id="tx" type="number" step="0.01"></div>
+    <div class="row"><label>Target Y</label><input id="ty" type="number" step="0.01"></div>
+    <div class="row"><label>Target Z</label><input id="tz" type="number" step="0.01"></div>
+    <div class="row"><label>FOV</label><input id="fov" type="number" step="1"></div>
+    <button id="applyCam">Aplicar</button><button id="copyCam">Copiar coordenadas</button>
+    <div id="cameraOut"></div>
+  </div>
 </div>
 <script type="module">
 import * as THREE from 'three';
@@ -38,18 +49,15 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm';
 
 const AS='./embocacosas-assets/';
-const statusEl=document.getElementById('status');
-const scoreEl=document.getElementById('score');
-const powerEl=document.getElementById('power');
-const nextEl=document.getElementById('next');
-const log=[];
-function status(s){log.push(s);while(log.length>6)log.shift();statusEl.textContent=log.join('\n');console.log('[Embocacosas]',s)}
-
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x878b86);
 scene.fog=new THREE.Fog(0x878b86,14,28);
+
 const camera=new THREE.PerspectiveCamera(56,innerWidth/innerHeight,.05,100);
 camera.position.set(0,2.2,6.5);
+const cameraTarget=new THREE.Vector3(.2,1.35,-1.65);
+camera.lookAt(cameraTarget);
+
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
 renderer.setSize(innerWidth,innerHeight);
@@ -60,186 +68,211 @@ renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
 document.body.prepend(renderer.domElement);
 
-const controls=new OrbitControls(camera,renderer.domElement);
-controls.target.set(.2,1.35,-1.65);
-controls.enableDamping=true;
-controls.dampingFactor=.06;
-controls.minDistance=3.2;
-controls.maxDistance=10;
-controls.mouseButtons={LEFT:null,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};
-controls.touches={ONE:null,TWO:THREE.TOUCH.DOLLY_PAN};
-renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
-
 scene.add(new THREE.HemisphereLight(0xffffff,0x454b46,1.8));
 const sun=new THREE.DirectionalLight(0xfff1d9,2.4);sun.position.set(-4,7,5);sun.castShadow=true;scene.add(sun);
-const fill=new THREE.PointLight(0xeaf2ff,12,12,2);fill.position.set(3,3,3);scene.add(fill);
 
 const world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.82,0)});
-world.allowSleep=true;
 world.defaultContactMaterial.friction=.42;
-world.defaultContactMaterial.restitution=.32;
-const ground=new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Plane()});
-ground.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(ground);
-const wallBody=new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Box(new CANNON.Vec3(5,3.5,.08)),position:new CANNON.Vec3(0,3.5,-3.05)});world.addBody(wallBody);
+world.defaultContactMaterial.restitution=.28;
+const ground=new CANNON.Body({type:CANNON.Body.STATIC,shape:new CANNON.Plane()});ground.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(ground);
 
-let tacho=null, tachoBaseQuat=null, tachoAngle=0, tachoAV=0;
-let tachoRestBox=null, tachoRestSize=new THREE.Vector3(), tachoRestCenter=new THREE.Vector3();
-let tachoPivotWorld=new THREE.Vector3();
-let tachoFoundName='';
+let tacho=null,tachoBaseQuat=null,tachoAngle=0,tachoAV=0;
 const loader=new GLTFLoader();
-
 loader.load(AS+'escena.glb',g=>{
   scene.add(g.scene);
   g.scene.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
-
   const candidates=[];
   g.scene.traverse(o=>{if(/tacho|tambor|bin|drum/i.test(o.name))candidates.push(o)});
-  tacho=candidates.find(o=>o.isMesh||o.children.length) || candidates[0] || null;
-  if(!tacho){
-    const names=[];g.scene.traverse(o=>{if(o.name)names.push(o.name)});
-    status('⚠ No encontré objeto tacho. Nombres: '+names.slice(0,20).join(', '));
-  }else{
-    tachoFoundName=tacho.name;
-    tachoBaseQuat=tacho.quaternion.clone();
-    tacho.updateMatrixWorld(true);
-    tachoRestBox=new THREE.Box3().setFromObject(tacho);
-    tachoRestBox.getSize(tachoRestSize);
-    tachoRestBox.getCenter(tachoRestCenter);
-    tacho.getWorldPosition(tachoPivotWorld);
-    status('✓ Tacho: '+tacho.name+' · pivote sobre eje Z');
-  }
-  status('✓ escena.glb cargada');
-},p=>{if(p.total)status('escena.glb '+Math.round(p.loaded/p.total*100)+'%')},e=>status('❌ Error escena.glb: '+(e?.message||String(e))));
+  tacho=candidates.find(o=>o.isMesh||o.children.length)||candidates[0]||null;
+  if(tacho){tachoBaseQuat=tacho.quaternion.clone();}
+});
+
+const arrowRoot=new THREE.Group();
+scene.add(arrowRoot);
+const arrowMat=new THREE.MeshStandardMaterial({color:0xffd02d,emissive:0x3c2400,roughness:.5,metalness:.05});
+const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,1.0,16),arrowMat);
+shaft.rotation.x=Math.PI/2;
+shaft.position.z=-.5;
+const tip=new THREE.Mesh(new THREE.ConeGeometry(.09,.24,20),arrowMat);
+tip.rotation.x=-Math.PI/2;
+tip.position.z=-1.12;
+arrowRoot.add(shaft,tip);
+
+let aimPhase=0,charging=false,charge=0;
+const baseArrowScale=1;
+const maxArrowScale=2.8;
+
+function placeArrow(){
+  const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+  const p=camera.position.clone().addScaledVector(dir,1.2);
+  p.y-=.12;
+  arrowRoot.position.copy(p);
+  arrowRoot.quaternion.copy(camera.quaternion);
+}
+placeArrow();
 
 const projectiles=[];
-let attempts=0,hits=0,charging=false,chargeStart=0,nextType=0;
+let attempts=0,hits=0,nextType=0;
 const TYPES=[
   {name:'ESFERA',mass:1.0},
   {name:'CUBO',mass:1.6},
   {name:'DONA',mass:1.25}
 ];
-function refreshNext(){nextEl.textContent='Próximo: '+TYPES[nextType].name+' · '+TYPES[nextType].mass.toFixed(2)+' kg'}
-refreshNext();
-function refreshScore(){scoreEl.textContent=hits+' / '+attempts}
+const scoreEl=document.getElementById('score');
+function score(){scoreEl.textContent=hits+' / '+attempts}
 
-function makeProjectile(typeIndex,pos,vel){
-  const type=TYPES[typeIndex];
+function spawnProjectile(typeIndex,dir,speed){
   let geom,shape;
   if(typeIndex===0){geom=new THREE.SphereGeometry(.16,24,16);shape=new CANNON.Sphere(.16)}
   else if(typeIndex===1){geom=new THREE.BoxGeometry(.27,.27,.27);shape=new CANNON.Box(new CANNON.Vec3(.135,.135,.135))}
   else {geom=new THREE.TorusGeometry(.18,.065,12,28);geom.rotateX(Math.PI/2);shape=new CANNON.Sphere(.19)}
-  const mat=new THREE.MeshStandardMaterial({color:typeIndex===0?0x4aa5ff:typeIndex===1?0xff7043:0xf3c64f,roughness:.58,metalness:.04});
-  const mesh=new THREE.Mesh(geom,mat);mesh.castShadow=true;mesh.position.copy(pos);scene.add(mesh);
-  const body=new CANNON.Body({mass:type.mass,shape,position:new CANNON.Vec3(pos.x,pos.y,pos.z),linearDamping:.015,angularDamping:.02});
-  body.velocity.set(vel.x,vel.y,vel.z);
-  body.angularVelocity.set((Math.random()-.5)*8,(Math.random()-.5)*8,(Math.random()-.5)*8);
+  const mat=new THREE.MeshStandardMaterial({color:typeIndex===0?0x4aa5ff:typeIndex===1?0xff7043:0xf3c64f,roughness:.58});
+  const mesh=new THREE.Mesh(geom,mat);mesh.castShadow=true;
+  const start=arrowRoot.position.clone().addScaledVector(dir,.55);
+  mesh.position.copy(start);scene.add(mesh);
+  const body=new CANNON.Body({mass:TYPES[typeIndex].mass,shape,position:new CANNON.Vec3(start.x,start.y,start.z),linearDamping:.01,angularDamping:.02});
+  body.velocity.set(dir.x*speed,dir.y*speed+1.0,dir.z*speed);
+  body.angularVelocity.set((Math.random()-.5)*7,(Math.random()-.5)*7,(Math.random()-.5)*7);
   world.addBody(body);
-  projectiles.push({mesh,body,type,mass:type.mass,scored:false,hitTacho:false,age:0,lastY:pos.y});
+  projectiles.push({mesh,body,mass:TYPES[typeIndex].mass,scored:false,age:0,lastY:start.y,hitTacho:false});
 }
 
-function throwCurrent(){
-  const held=Math.min(1.5,(performance.now()-chargeStart)/1000);
-  const power=0.35+held/1.5*.65;
-  const dir=new THREE.Vector3();camera.getWorldDirection(dir);
-  const pos=camera.position.clone().addScaledVector(dir,.62);
-  pos.y-=.08;
-  const speed=7.5+power*10.5;
-  const vel=dir.multiplyScalar(speed);vel.y+=1.2+power*1.5;
-  makeProjectile(nextType,pos,vel);
-  attempts++;refreshScore();
-  nextType=(nextType+1)%TYPES.length;refreshNext();
-  powerEl.style.width='0%';
+function currentAimDir(){
+  const dir=new THREE.Vector3(0,0,-1);
+  const yaw=Math.sin(aimPhase)*THREE.MathUtils.degToRad(28);
+  const pitch=THREE.MathUtils.degToRad(5);
+  const qYaw=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);
+  const qPitch=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),pitch);
+  dir.applyQuaternion(qPitch).applyQuaternion(qYaw).applyQuaternion(camera.quaternion).normalize();
+  return dir;
 }
 
-function beginCharge(e){
-  if(e.pointerType==='mouse' && e.button!==0)return;
-  if(e.pointerType==='mouse' && e.buttons===2)return;
-  charging=true;chargeStart=performance.now();
-  try{renderer.domElement.setPointerCapture(e.pointerId)}catch{}
+function fire(){
+  const dir=currentAimDir();
+  const speed=7.5+charge*10.5;
+  spawnProjectile(nextType,dir,speed);
+  attempts++;score();
+  nextType=(nextType+1)%TYPES.length;
+  charge=0;
 }
-function endCharge(e){
+
+renderer.domElement.addEventListener('pointerdown',e=>{
+  if(document.getElementById('editor').classList.contains('show')) return;
+  charging=true;
+});
+renderer.domElement.addEventListener('pointerup',e=>{
   if(!charging)return;
-  charging=false;throwCurrent();
-}
-renderer.domElement.addEventListener('pointerdown',beginCharge);
-renderer.domElement.addEventListener('pointerup',endCharge);
-renderer.domElement.addEventListener('pointercancel',()=>{charging=false;powerEl.style.width='0%'});
+  charging=false;fire();
+});
+renderer.domElement.addEventListener('pointercancel',()=>{charging=false;charge=0});
 
-function currentTachoInfo(){
+function tachoInfo(){
   if(!tacho)return null;
-  tacho.updateMatrixWorld(true);
-  const box=new THREE.Box3().setFromObject(tacho);
-  const size=new THREE.Vector3(),center=new THREE.Vector3();box.getSize(size);box.getCenter(center);
-  return {box,size,center,topY:box.max.y,mouthR:Math.max(.12,Math.min(size.x,size.z)*.34)};
-}
-
-function impactTacho(p,info){
-  if(p.hitTacho||!tacho)return;
-  const q=p.mesh.position;
-  const b=info.box;
-  const pad=.12;
-  if(q.x>b.min.x-pad&&q.x<b.max.x+pad&&q.y>b.min.y-pad&&q.y<b.max.y+pad&&q.z>b.min.z-pad&&q.z<b.max.z+pad){
-    const v=p.body.velocity;
-    const speed=Math.hypot(v.x,v.y,v.z);
-    if(speed>1.2){
-      const impulse=p.mass*speed;
-      const side=Math.sign(q.x-info.center.x)||1;
-      const threshold=2.2;
-      if(impulse>threshold){
-        tachoAV += side*Math.min(.9,(impulse-threshold)*.022);
-      }
-      p.body.velocity.z*=-.28;
-      p.body.velocity.x*=.78;
-      p.body.velocity.y*=.8;
-      p.hitTacho=true;
-    }
-  }
-}
-
-function checkScore(p,info){
-  if(p.scored||!info)return;
-  const q=p.mesh.position;
-  const dx=q.x-info.center.x,dz=q.z-info.center.z;
-  const inside=Math.hypot(dx,dz)<info.mouthR;
-  const crossed=p.lastY>info.topY+.03 && q.y<=info.topY+.03 && p.body.velocity.y<0;
-  if(inside&&crossed){
-    p.scored=true;hits++;refreshScore();status('🎯 ¡EMBOCADA! '+p.type.name);
-    p.body.velocity.x*=.35;p.body.velocity.z*=.35;
-  }
-  p.lastY=q.y;
+  const b=new THREE.Box3().setFromObject(tacho),s=new THREE.Vector3(),c=new THREE.Vector3();
+  b.getSize(s);b.getCenter(c);
+  return {box:b,size:s,center:c,topY:b.max.y,mouthR:Math.max(.12,Math.min(s.x,s.z)*.34)};
 }
 
 function updateTacho(dt){
   if(!tacho||!tachoBaseQuat)return;
-  // resorte + amortiguación: pivota sobre el eje LOCAL Z del objeto exportado
-  const stiffness=7.0,damping=2.8;
-  tachoAV+=(-stiffness*tachoAngle-damping*tachoAV)*dt;
+  tachoAV+=(-7*tachoAngle-2.8*tachoAV)*dt;
   tachoAngle+=tachoAV*dt;
-  const max=.65;tachoAngle=Math.max(-max,Math.min(max,tachoAngle));
+  tachoAngle=Math.max(-.65,Math.min(.65,tachoAngle));
   const dq=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),tachoAngle);
   tacho.quaternion.copy(tachoBaseQuat).multiply(dq);
 }
+
+function updateProjectiles(dt){
+  const info=tachoInfo();
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p=projectiles[i];p.age+=dt;
+    p.mesh.position.set(p.body.position.x,p.body.position.y,p.body.position.z);
+    p.mesh.quaternion.set(p.body.quaternion.x,p.body.quaternion.y,p.body.quaternion.z,p.body.quaternion.w);
+    if(info){
+      const q=p.mesh.position;
+      const dx=q.x-info.center.x,dz=q.z-info.center.z;
+      if(!p.scored && p.lastY>info.topY+.03 && q.y<=info.topY+.03 && p.body.velocity.y<0 && Math.hypot(dx,dz)<info.mouthR){
+        p.scored=true;hits++;score();
+      }
+      if(!p.hitTacho){
+        const b=info.box,pad=.1;
+        if(q.x>b.min.x-pad&&q.x<b.max.x+pad&&q.y>b.min.y-pad&&q.y<b.max.y+pad&&q.z>b.min.z-pad&&q.z<b.max.z+pad){
+          const v=p.body.velocity;const speed=Math.hypot(v.x,v.y,v.z);
+          const impulse=p.mass*speed;
+          if(impulse>2.2){
+            const side=Math.sign(q.x-info.center.x)||1;
+            tachoAV+=side*Math.min(.9,(impulse-2.2)*.025);
+          }
+          p.hitTacho=true;
+        }
+      }
+      p.lastY=q.y;
+    }
+    if(p.age>18||p.body.position.y<-3){world.removeBody(p.body);scene.remove(p.mesh);projectiles.splice(i,1)}
+  }
+}
+
+const editor=document.getElementById('editor');
+const editorToggle=document.getElementById('editorToggle');
+function syncInputs(){
+  cx.value=camera.position.x.toFixed(3);cy.value=camera.position.y.toFixed(3);cz.value=camera.position.z.toFixed(3);
+  tx.value=cameraTarget.x.toFixed(3);ty.value=cameraTarget.y.toFixed(3);tz.value=cameraTarget.z.toFixed(3);fov.value=camera.fov.toFixed(1);
+  cameraOut.textContent=`camera.position.set(${cx.value}, ${cy.value}, ${cz.value});\ncameraTarget.set(${tx.value}, ${ty.value}, ${tz.value});\ncamera.fov=${fov.value};`;
+}
+syncInputs();
+const editorControls=new OrbitControls(camera,renderer.domElement);
+editorControls.target.copy(cameraTarget);
+editorControls.enabled=false;
+editorControls.enableDamping=true;
+editorToggle.onclick=()=>{
+  editor.classList.toggle('show');
+  editorControls.enabled=editor.classList.contains('show');
+  syncInputs();
+};
+applyCam.onclick=()=>{
+  camera.position.set(+cx.value,+cy.value,+cz.value);
+  cameraTarget.set(+tx.value,+ty.value,+tz.value);
+  camera.fov=+fov.value;camera.updateProjectionMatrix();camera.lookAt(cameraTarget);
+  editorControls.target.copy(cameraTarget);syncInputs();placeArrow();
+};
+copyCam.onclick=async()=>{
+  syncInputs();
+  await navigator.clipboard.writeText(cameraOut.textContent);
+  copyCam.textContent='Copiado ✓';setTimeout(()=>copyCam.textContent='Copiar coordenadas',1200);
+};
 
 const clock=new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
   const dt=Math.min(.033,clock.getDelta());
   world.step(1/60,dt,3);
-  updateTacho(dt);
-  const info=currentTachoInfo();
-  for(let i=projectiles.length-1;i>=0;i--){
-    const p=projectiles[i];p.age+=dt;
-    p.mesh.position.set(p.body.position.x,p.body.position.y,p.body.position.z);
-    p.mesh.quaternion.set(p.body.quaternion.x,p.body.quaternion.y,p.body.quaternion.z,p.body.quaternion.w);
-    if(info){checkScore(p,info);impactTacho(p,info)}
-    if(p.age>18||p.body.position.y<-3){world.removeBody(p.body);scene.remove(p.mesh);projectiles.splice(i,1)}
+
+  if(editorControls.enabled){
+    editorControls.update();
+    cameraTarget.copy(editorControls.target);
+    syncInputs();
+    placeArrow();
+  }else{
+    camera.lookAt(cameraTarget);
   }
-  if(charging){const held=Math.min(1.5,(performance.now()-chargeStart)/1000);powerEl.style.width=(held/1.5*100)+'%'}
-  controls.update();renderer.render(scene,camera);
+
+  if(!charging) aimPhase+=dt*1.7;
+  else charge=Math.min(1,charge+dt/1.45);
+
+  const yaw=Math.sin(aimPhase)*THREE.MathUtils.degToRad(28);
+  arrowRoot.rotation.set(0,yaw,0);
+  const s=baseArrowScale+(maxArrowScale-baseArrowScale)*charge;
+  arrowRoot.scale.set(1,1,s);
+
+  updateTacho(dt);
+  updateProjectiles(dt);
+  renderer.render(scene,camera);
 }
 animate();
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
-status('✓ Motor 3D + lanzamientos iniciado');
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)
+});
 </script>
 </body>
 </html>
