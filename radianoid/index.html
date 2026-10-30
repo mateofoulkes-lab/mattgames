@@ -7,19 +7,11 @@
   <meta name="description" content="Radianoid: el rompebloques de 360 grados, hexágonos neón y un arsenal de power-ups.">
   <title>RADIANOID — Neon Orbital Breaker</title>
   <link rel="icon" type="image/svg+xml" href="icon.svg">
-  <link rel="stylesheet" href="style.css?v=1.3.0">
+  <link rel="stylesheet" href="style.css?v=1.4.0">
   <script src="game.js?v=1.3.0" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
-  <header class="topbar">
-    <a class="back-link" href="../" aria-label="Volver a Matt Games"><span aria-hidden="true">↖</span> MATT GAMES <span class="back-text">/ ARCADE</span></a>
-    <span class="edition"><span class="live-dot"></span> ORBITAL ARCADE // 001</span>
-    <div class="top-actions">
-      <button class="sound-btn settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" title="Opciones de control (O)"><span aria-hidden="true">⚙</span><span>OPCIONES</span></button>
-      <button class="sound-btn" id="soundBtn" type="button" aria-label="Activar o silenciar sonido" title="Sonido"><span id="soundIcon">♫</span><span id="soundLabel">SOUND ON</span></button>
-    </div>
-  </header>
   <div id="settingsOverlay" class="settings-overlay" hidden>
     <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <div class="settings-top"><span class="panel-kicker">// CONTROL SYSTEM</span><button id="settingsClose" type="button" class="settings-close" aria-label="Cerrar opciones">✕</button></div>
@@ -35,12 +27,20 @@
     </section>
   </div>
   <main class="page">
+    <section class="play-area">
+      <aside class="game-hud" aria-label="Panel de control y puntuación">
+  <header class="topbar">
+    <a class="back-link" href="../" aria-label="Volver a Matt Games"><span aria-hidden="true">↖</span> MATT GAMES <span class="back-text">/ ARCADE</span></a>
+    <span class="edition"><span class="live-dot"></span> ORBITAL ARCADE // 001</span>
+    <div class="top-actions">
+      <button class="sound-btn settings-btn" id="settingsBtn" type="button" aria-haspopup="dialog" title="Opciones de control (O)"><span aria-hidden="true">⚙</span><span>OPCIONES</span></button>
+      <button class="sound-btn" id="soundBtn" type="button" aria-label="Activar o silenciar sonido" title="Sonido"><span id="soundIcon">♫</span><span id="soundLabel">SOUND ON</span></button>
+    </div>
+  </header>
     <section class="title-row" aria-label="Radianoid">
       <div><div class="eyebrow">THE 360° BRICK BREAKER</div><h1>RADI<span class="orbital-o">A<span class="orbit-point"></span></span>NOID<span class="title-dot">.</span></h1><p class="intro">El centro es el objetivo. <strong>Todo lo demás gira.</strong></p></div>
       <div class="title-decoration" aria-hidden="true"><span>◈</span><small>EST. 2026<br>NEON DIVISION</small></div>
     </section>
-    <section class="play-area">
-      <div class="arcade-main">
         <div class="scorebar">
           <div class="score-cell"><span class="score-label">PUNTOS</span><span id="score" class="score-value">000000</span></div>
           <div class="score-cell"><span class="score-label">RÉCORD</span><span id="best" class="score-value secondary">000000</span></div>
@@ -48,6 +48,10 @@
           <div class="score-cell life-cell"><span class="score-label">VIDAS</span><span id="lives" class="score-value hearts">◆ ◆ ◆</span></div>
           <button id="pauseBtn" class="icon-btn" type="button" aria-label="Pausar juego" title="Pausar (P)">Ⅱ</button>
         </div>
+        <div class="below-board"><span><i class="tiny-dot"></i> <strong id="stateLabel">ESPERANDO JUGADOR</strong></span><div class="progress-wrap"><span id="bricksLabel">37 NÚCLEOS</span><div class="progress"><div id="progressFill"></div></div></div><span class="fpshint">360° / NO ESCAPE</span></div>
+    <footer class="hud-footer">© 2026 MATT GAMES <span>✦</span> RADIANT CIRCUITS <span class="footer-right">HECHO PARA ROMPER LA ÓRBITA</span></footer>
+      </aside>
+      <div class="arcade-main">
         <div id="board" class="board-shell">
           <canvas id="game" aria-label="Juego Radianoid: la paleta sigue la dirección del cursor. Clic para lanzar o disparar."></canvas>
           <div class="board-vignette" aria-hidden="true"></div>
@@ -65,7 +69,6 @@
             </div>
           </div>
         </div>
-        <div class="below-board"><span><i class="tiny-dot"></i> <strong id="stateLabel">ESPERANDO JUGADOR</strong></span><div class="progress-wrap"><span id="bricksLabel">37 NÚCLEOS</span><div class="progress"><div id="progressFill"></div></div></div><span class="fpshint">360° / NO ESCAPE</span></div>
       </div>
       <aside class="sidebar">
         <div class="panel-head"><span class="panel-kicker">// POWER SYSTEM</span><h2>MEJORAS<span>_</span></h2><p>Atrapá las cápsulas que salen disparadas desde los hexágonos.</p></div>
@@ -85,7 +88,6 @@
         <div class="howto"><div class="howto-header">GUÍA DE VUELO <span>↗</span></div><p>El paddle sigue al cursor. <kbd>←</kbd><kbd>→</kbd> o <kbd>A</kbd><kbd>D</kbd> también giran. <kbd>ESPACIO</kbd> o clic izquierdo para lanzar y disparar. Clic derecho cancela pegajoso. <kbd>P</kbd> pausa.</p><p class="subtle">Modo horizontal alternativo en ⚙ Opciones. En pantallas táctiles, arrastrá sobre la arena.</p></div>
       </aside>
     </section>
-    <footer>© 2026 MATT GAMES <span>✦</span> RADIANT CIRCUITS <span class="footer-right">HECHO PARA ROMPER LA ÓRBITA</span></footer>
   </main>
 </body>
 </html>
