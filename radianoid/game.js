@@ -459,7 +459,7 @@
   function update(dt) {
     state.time += dt;
     const before = state.paddle;
-    if (state.keyboardDir) state.targetPaddle = wrap(state.targetPaddle + state.keyboardDir * dt * 3.4);
+    if (state.keyboardDir) state.targetPaddle = wrap(state.targetPaddle - state.keyboardDir * dt * 3.4);
     const delta = angleDiff(state.targetPaddle, state.paddle);
     state.paddle = wrap(state.paddle + delta * Math.min(1, dt * 21));
     state.paddleVelocity = angleDiff(state.paddle, before) / dt;
@@ -559,7 +559,7 @@
     const rect = board.getBoundingClientRect();
     if (event.pointerType === 'mouse') {
       const portion = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      state.targetPaddle = wrap((portion - .5) * TAU + Math.PI / 2);
+      state.targetPaddle = wrap((.5 - portion) * TAU + Math.PI / 2);
     } else if (state.touchMoving) {
       state.targetPaddle = Math.atan2(event.clientY - rect.top - rect.height / 2, event.clientX - rect.left - rect.width / 2);
     }
