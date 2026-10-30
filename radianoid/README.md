@@ -6,7 +6,8 @@ Rompebloques arcade radial en HTML Canvas (sin build, frameworks ni dependencias
 
 - **Mouse (predeterminado):** el paddle sigue directamente el ángulo del cursor respecto del centro de la arena.
 - **Opciones (⚙ o tecla O):** se puede elegir **movimiento horizontal**, que convierte X en los 360° y conserva el sentido previo. Se guarda en `localStorage`.
-- **Click / Espacio:** lanzar bolas retenidas y disparar cuando hay láser.
+- **Clic izquierdo / Espacio:** lanzar bolas retenidas y disparar cuando hay láser.
+- **Clic derecho sobre la arena:** cancelar el poder pegajoso (C) y liberar las pelotas capturadas.
 - **Mantener click / Espacio:** disparo repetido del láser.
 - **A/D / ←/→:** girar la paleta.
 - **P / Esc:** pausar / reanudar.
@@ -16,7 +17,7 @@ Rompebloques arcade radial en HTML Canvas (sin build, frameworks ni dependencias
 
 Cada pelota suma **una carga de cinco** cada vez que sale del paddle y regresa sin tocar ningún ladrillo durante ese vuelo. Golpear ladrillos no suma ni quita cargas ya acumuladas. Los cinco segmentos luminosos alrededor de cada bola muestran su energía; el indicador de la arena muestra la mayor carga de las bolas activas.
 
-Con **5/5**, la bola brilla dorada. Su siguiente impacto rompe el ladrillo alcanzado y sus **hasta seis vecinos hexagonales inmediatos**, incluyendo ladrillos resistentes, con una onda expansiva neón. Cada ladrillo destruido suma puntos y puede soltar power-ups. La bola vuelve a 0/5 tras detonar y puede cargarse de nuevo. La carga es individual, incluso con multibola; se pierde al perder la pelota o al comenzar otro sector. Los disparos láser no cuentan como impactos de bola.
+Con **5/5**, la bola brilla dorada. Su siguiente impacto rompe el ladrillo alcanzado y sus **hasta dieciocho vecinos** en dos anillos hexagonales (hasta 19 ladrillos por explosión), incluyendo ladrillos resistentes, con una onda expansiva neón. Cada ladrillo destruido suma puntos y puede soltar power-ups. La bola vuelve a 0/5 tras detonar y puede cargarse de nuevo. La carga es individual, incluso con multibola; se pierde al perder la pelota o al comenzar otro sector. Los disparos láser no cuentan como impactos de bola.
 
 ## Power-ups
 
@@ -40,3 +41,6 @@ Las mejoras pueden coexistir salvo G y T, que se reemplazan mutuamente. Las cáp
 ## Ejecutar
 
 Abrir `index.html` en un navegador o servir con un servidor estático (`python -m http.server` desde la raíz del repo). No requiere conexión una vez descargados los archivos (las tipografías externas tienen alternativas locales).
+## Pantalla de escritorio (v1.3)
+
+El área de juego y los paneles se ajustan a la altura visible de la ventana del navegador, sin scroll en PC. En móvil se mantiene el desplazamiento normal.
