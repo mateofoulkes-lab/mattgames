@@ -4,7 +4,8 @@ Rompebloques arcade radial en HTML Canvas (sin build, frameworks ni dependencias
 
 ## Controles
 
-- **Mouse horizontal:** posición horizontal = ángulo de la paleta (recorre 360°).
+- **Mouse (predeterminado):** el paddle sigue directamente el ángulo del cursor respecto del centro de la arena.
+- **Opciones (⚙ o tecla O):** se puede elegir **movimiento horizontal**, que convierte X en los 360° y conserva el sentido previo. Se guarda en `localStorage`.
 - **Click / Espacio:** lanzar bolas retenidas y disparar cuando hay láser.
 - **Mantener click / Espacio:** disparo repetido del láser.
 - **A/D / ←/→:** girar la paleta.
@@ -25,6 +26,8 @@ Rompebloques arcade radial en HTML Canvas (sin build, frameworks ni dependencias
 | M | Triplica las bolas | Instantáneo |
 | H | Hipermultibola | Instantáneo |
 | X | Hipermultibola perforante | Instantáneo + perforación |
+
+Los hexágonos, la pelota, la paleta y las cápsulas usan el 80% de su tamaño original; la órbita se mantiene a su radio anterior para ampliar la zona libre entre centro y paddle.
 
 Las mejoras pueden coexistir salvo G y T, que se reemplazan mutuamente. Las cápsulas salen del hexágono roto en ángulo aleatorio y se atrapan en el perímetro. El récord se guarda en `localStorage`.
 
