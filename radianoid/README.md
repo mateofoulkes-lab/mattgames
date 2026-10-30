@@ -44,3 +44,7 @@ Abrir `index.html` en un navegador o servir con un servidor estático (`python -
 ## Pantalla de escritorio (v1.3)
 
 El área de juego y los paneles se ajustan a la altura visible de la ventana del navegador, sin scroll en PC. En móvil se mantiene el desplazamiento normal.
+
+## Interfaz v1.5
+
+En el panel izquierdo, puntuación y récord ocupan filas independientes para que los números no se superpongan. En la arena, el cursor del sistema se sustituye por un punto pequeño con halo cian neón centrado en la posición real del mouse. Los botones y la pantalla de inicio conservan sus cursores normales.
