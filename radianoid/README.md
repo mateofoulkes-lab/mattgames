@@ -12,6 +12,12 @@ Rompebloques arcade radial en HTML Canvas (sin build, frameworks ni dependencias
 - **P / Esc:** pausar / reanudar.
 - **Táctil:** arrastrar sobre la arena para ubicar la paleta alrededor del círculo; tocar para lanzar.
 
+## Sobrecarga cinética (v1.2)
+
+Cada pelota suma **una carga de cinco** cada vez que sale del paddle y regresa sin tocar ningún ladrillo durante ese vuelo. Golpear ladrillos no suma ni quita cargas ya acumuladas. Los cinco segmentos luminosos alrededor de cada bola muestran su energía; el indicador de la arena muestra la mayor carga de las bolas activas.
+
+Con **5/5**, la bola brilla dorada. Su siguiente impacto rompe el ladrillo alcanzado y sus **hasta seis vecinos hexagonales inmediatos**, incluyendo ladrillos resistentes, con una onda expansiva neón. Cada ladrillo destruido suma puntos y puede soltar power-ups. La bola vuelve a 0/5 tras detonar y puede cargarse de nuevo. La carga es individual, incluso con multibola; se pierde al perder la pelota o al comenzar otro sector. Los disparos láser no cuentan como impactos de bola.
+
 ## Power-ups
 
 | Letra | Efecto | Duración |
