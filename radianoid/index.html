@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#050817">
+  <meta name="description" content="Radianoid: el rompebloques de 360 grados, hexágonos neón y un arsenal de power-ups.">
+  <title>RADIANOID — Neon Orbital Breaker</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+  <script src="game.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="back-link" href="../" aria-label="Volver a Matt Games"><span aria-hidden="true">↖</span> MATT GAMES <span class="back-text">/ ARCADE</span></a>
+    <span class="edition"><span class="live-dot"></span> ORBITAL ARCADE // 001</span>
+    <button class="sound-btn" id="soundBtn" type="button" aria-label="Activar o silenciar sonido" title="Sonido"><span id="soundIcon">♫</span><span id="soundLabel">SOUND ON</span></button>
+  </header>
+  <main class="page">
+    <section class="title-row" aria-label="Radianoid">
+      <div><div class="eyebrow">THE 360° BRICK BREAKER</div><h1>RADI<span class="orbital-o">A<span class="orbit-point"></span></span>NOID<span class="title-dot">.</span></h1><p class="intro">El centro es el objetivo. <strong>Todo lo demás gira.</strong></p></div>
+      <div class="title-decoration" aria-hidden="true"><span>◈</span><small>EST. 2026<br>NEON DIVISION</small></div>
+    </section>
+    <section class="play-area">
+      <div class="arcade-main">
+        <div class="scorebar">
+          <div class="score-cell"><span class="score-label">PUNTOS</span><span id="score" class="score-value">000000</span></div>
+          <div class="score-cell"><span class="score-label">RÉCORD</span><span id="best" class="score-value secondary">000000</span></div>
+          <div class="score-cell level-cell"><span class="score-label">SECTOR</span><span id="level" class="score-value">01</span></div>
+          <div class="score-cell life-cell"><span class="score-label">VIDAS</span><span id="lives" class="score-value hearts">◆ ◆ ◆</span></div>
+          <button id="pauseBtn" class="icon-btn" type="button" aria-label="Pausar juego" title="Pausar (P)">Ⅱ</button>
+        </div>
+        <div id="board" class="board-shell">
+          <canvas id="game" aria-label="Juego Radianoid: mueve el mouse horizontalmente para girar la paleta. Clic para lanzar o disparar."></canvas>
+          <div class="board-vignette" aria-hidden="true"></div>
+          <div class="stage-caption" id="stageCaption">ARCADE SYSTEM <span>↗</span> READY</div>
+          <div class="center-hint" id="centerHint">CLICK PARA LANZAR</div>
+          <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
+            <div class="overlay-card">
+              <div class="overlay-symbol" id="overlaySymbol">⬡</div>
+              <div class="overlay-eyebrow" id="overlayEyebrow">BIENVENIDO AL ORBITAL</div>
+              <h2 id="overlayTitle">ROMPÉ LAS<br><em>REGLAS.</em></h2>
+              <p id="overlayText">Los hexágonos están en el centro. Tu paleta controla todo el perímetro. No dejes escapar la energía.</p>
+              <button id="primaryBtn" class="primary-btn" type="button">INICIAR PARTIDA <span>↗</span></button>
+              <div class="overlay-footnote" id="overlayFootnote">MOUSE HORIZONTAL = GIRAR <span>•</span> CLICK = LANZAR</div>
+            </div>
+          </div>
+        </div>
+        <div class="below-board"><span><i class="tiny-dot"></i> <strong id="stateLabel">ESPERANDO JUGADOR</strong></span><div class="progress-wrap"><span id="bricksLabel">37 NÚCLEOS</span><div class="progress"><div id="progressFill"></div></div></div><span class="fpshint">360° / NO ESCAPE</span></div>
+      </div>
+      <aside class="sidebar">
+        <div class="panel-head"><span class="panel-kicker">// POWER SYSTEM</span><h2>MEJORAS<span>_</span></h2><p>Atrapá las cápsulas que salen disparadas desde los hexágonos.</p></div>
+        <div class="power-list" id="powerList">
+          <div class="power-row"><b style="--p:#55f5ff">G</b><div><strong>EXPANSIÓN</strong><small>Paleta más grande</small></div></div>
+          <div class="power-row"><b style="--p:#ff6b9b">T</b><div><strong>REDUCCIÓN</strong><small>Paleta más chica</small></div></div>
+          <div class="power-row"><b style="--p:#f9dc7b">E</b><div><strong>ELÁSTICA</strong><small>Rebote turbo y control</small></div></div>
+          <div class="power-row"><b style="--p:#9c91ff">D</b><div><strong>DUAL</strong><small>Segunda paleta opuesta</small></div></div>
+          <div class="power-row"><b style="--p:#8dffb2">C</b><div><strong>CAPTURA</strong><small>Retiene; click para soltar</small></div></div>
+          <div class="power-row"><b style="--p:#ffbc75">L</b><div><strong>LÁSER</strong><small>Click sostenido para disparar</small></div></div>
+          <div class="power-row"><b style="--p:#e595ff">P</b><div><strong>PERFORANTE</strong><small>Las bolas atraviesan bricks</small></div></div>
+          <div class="power-row"><b style="--p:#6affd4">M</b><div><strong>MULTIBOLA</strong><small>Triple pelota</small></div></div>
+          <div class="power-row"><b style="--p:#ff7fdc">H</b><div><strong>HIPER MULTIBOLA</strong><small>Lluvia de bolas</small></div></div>
+          <div class="power-row"><b style="--p:#fff087">X</b><div><strong>CAOS PERFORANTE</strong><small>Hipermultibola que atraviesa</small></div></div>
+        </div>
+        <div class="active-box"><div class="active-label"><span>EFECTOS ACTIVOS</span><span id="activeCount">00</span></div><div class="active-items" id="activeItems"><span class="no-effects">NINGÚN EFECTO ACTIVO</span></div></div>
+        <div class="howto"><div class="howto-header">GUÍA DE VUELO <span>↗</span></div><p><kbd>←</kbd><kbd>→</kbd> o <kbd>A</kbd><kbd>D</kbd> para girar. <kbd>ESPACIO</kbd> o click para lanzar y disparar. <kbd>P</kbd> pausa.</p><p class="subtle">También podés arrastrar sobre la arena en pantallas táctiles.</p></div>
+      </aside>
+    </section>
+    <footer>© 2026 MATT GAMES <span>✦</span> RADIANT CIRCUITS <span class="footer-right">HECHO PARA ROMPER LA ÓRBITA</span></footer>
+  </main>
+</body>
+</html>
