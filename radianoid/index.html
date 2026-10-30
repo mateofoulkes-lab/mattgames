@@ -7,8 +7,8 @@
   <meta name="description" content="Radianoid: el rompebloques de 360 grados, hexágonos neón y un arsenal de power-ups.">
   <title>RADIANOID — Neon Orbital Breaker</title>
   <link rel="icon" type="image/svg+xml" href="icon.svg">
-  <link rel="stylesheet" href="style.css?v=1.1.0">
-  <script src="game.js?v=1.1.0" defer></script>
+  <link rel="stylesheet" href="style.css?v=1.2.0">
+  <script src="game.js?v=1.2.0" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -51,6 +51,7 @@
         <div id="board" class="board-shell">
           <canvas id="game" aria-label="Juego Radianoid: la paleta sigue la dirección del cursor. Clic para lanzar o disparar."></canvas>
           <div class="board-vignette" aria-hidden="true"></div>
+          <div id="chargeStatus" class="charge-status" title="Carga máxima entre las pelotas"><small>SOBRECARGA · MÁX.</small><strong id="chargeValue">▱▱▱▱▱</strong></div>
           <div class="stage-caption" id="stageCaption">ARCADE SYSTEM <span>↗</span> READY</div>
           <div class="center-hint" id="centerHint">CLICK PARA LANZAR</div>
           <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
