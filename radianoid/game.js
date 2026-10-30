@@ -221,15 +221,15 @@
   }
 
   function detonateBall(ball, target) {
-    // Hex-grid distance of 1: target plus its six immediate neighbors.
+    // Two hex rings around the impact: up to 19 bricks including the target.
     const neighbors = state.bricks.filter(brick => {
       const dq = brick.q - target.q, dr = brick.r - target.r;
-      return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)) <= 1;
+      return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)) <= 2;
     });
     ball.charge = 0;
-    state.explosions.push({x: target.x, y: target.y, radius: target.size * 3.1, age: 0, ttl: .58});
+    state.explosions.push({x: target.x, y: target.y, radius: target.size * 6.2, age: 0, ttl: .70});
     if (state.explosions.length > 18) state.explosions.shift();
-    scatterParticles(target.x, target.y, '#ffe98f', 42, 235);
+    scatterParticles(target.x, target.y, '#ffe98f', 68, 275);
     floatText(target.x, target.y - 29, '¡SOBRECARGA!', '#ffe48a', 25);
     state.shake = Math.max(state.shake, 15);
     state.flash = Math.max(state.flash, .65);
@@ -646,7 +646,26 @@
         event.clientX - rect.left - rect.width / 2);
     }
   }
+  function disableSticky() {
+    if (state.mode !== 'playing' || !hasPower('C')) return;
+    delete state.power.C;
+    // Cancel the sticky effect and release already captured balls.
+    launchStuck();
+    const x = Math.cos(state.paddle) * ORBIT;
+    const y = Math.sin(state.paddle) * ORBIT;
+    floatText(x, y, 'CAPTURA OFF', '#8dffb2', 16);
+    scatterParticles(x, y, '#8dffb2', 12, 105);
+    audioTone(520, .13, 'triangle', .035, -220);
+    updateHud(true);
+  }
+  board.addEventListener('contextmenu', event => event.preventDefault());
   board.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse' && event.button === 2) {
+      event.preventDefault();
+      disableSticky();
+      return;
+    }
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (event.target.closest('button') || state.mode !== 'playing') return;
     state.pointerDown = true;
     if (event.pointerType !== 'mouse') state.touchMoving = true;
