@@ -7,6 +7,7 @@
   // Shrink game pieces, but preserve the orbit radius to create extra breathing room.
   const PIECE_SCALE = 0.8;
   const BALL_R = 5.8 * PIECE_SCALE;
+  const MAX_CHARGE = 5;
   const HEX_PALETTE = ['#57edff', '#729dff', '#a58aff', '#fd74cd', '#ffd985'];
   const POWERS = {
     G: { label: 'EXPANSIÓN', color: '#55f5ff', duration: 20 },
@@ -33,7 +34,7 @@
     overlayFootnote: $('overlayFootnote'), primary: $('primaryBtn'),
     state: $('stateLabel'), progress: $('progressFill'), bricks: $('bricksLabel'),
     hint: $('centerHint'), active: $('activeItems'), activeCount: $('activeCount'),
-    caption: $('stageCaption'), settingsBtn: $('settingsBtn'),
+    caption: $('stageCaption'), chargeValue: $('chargeValue'), chargeStatus: $('chargeStatus'), settingsBtn: $('settingsBtn'),
     settings: $('settingsOverlay'), settingsClose: $('settingsClose'), settingsDone: $('settingsDone'),
     optionsHint: $('optionsHint')
   };
@@ -50,7 +51,7 @@
     paddle: Math.PI / 2, targetPaddle: Math.PI / 2, keyboardDir: 0,
     controlMode: preferredControl === 'horizontal' ? 'horizontal' : 'follow',
     paddleVelocity: 0, bricks: [], totalBricks: 0,
-    balls: [], capsules: [], shots: [], particles: [], floaters: [],
+    balls: [], capsules: [], shots: [], particles: [], floaters: [], explosions: [],
     power: {}, shake: 0, flash: 0, combo: 0, lastBreak: -10,
     stars: Array.from({ length: 95 }, () => ({
       x: Math.random() * 800, y: Math.random() * 800,
@@ -133,12 +134,12 @@
         const health = (dist === 0 ? 3 : dist === 1 && state.level > 1 ? 2 : 1)
           + (state.level > 3 && (q * 5 + r * 7 + state.level) % 9 === 0 ? 1 : 0);
         const color = HEX_PALETTE[(ringCount - dist + state.level - 1) % HEX_PALETTE.length];
-        state.bricks.push({ id: id++, x, y, size: size - 1.5 * PIECE_SCALE, vertices: hexVertices(x, y, size - 1.5 * PIECE_SCALE),
+        state.bricks.push({ id: id++, q, r, x, y, size: size - 1.5 * PIECE_SCALE, vertices: hexVertices(x, y, size - 1.5 * PIECE_SCALE),
           hp: health, maxHp: health, color, phase: random(0, TAU), ring: dist });
       }
     }
     state.totalBricks = state.bricks.length;
-    state.balls = []; state.capsules = []; state.shots = []; state.particles = []; state.floaters = [];
+    state.balls = []; state.capsules = []; state.shots = []; state.particles = []; state.floaters = []; state.explosions = [];
     state.power = {}; state.combo = 0; state.shake = 0;
     createBall(true);
     updateHud(true);
@@ -152,6 +153,7 @@
       vx: origin ? Math.cos(a) * speed : -Math.cos(a) * speed + random(-35, 35),
       vy: origin ? Math.sin(a) * speed : -Math.sin(a) * speed + random(-35, 35),
       r: BALL_R, stuck, stickSide: 0, speed, piercing, hitIds: new Set(),
+      charge: 0, flightStarted: !stuck && !origin, flightTouchedBrick: false,
       trail: [], lastBrick: -1, lastBrickAt: -100, glow: random(0, TAU)
     };
     if (!stuck) normalizeBall(ball);
@@ -218,6 +220,27 @@
     }
   }
 
+  function detonateBall(ball, target) {
+    // Hex-grid distance of 1: target plus its six immediate neighbors.
+    const neighbors = state.bricks.filter(brick => {
+      const dq = brick.q - target.q, dr = brick.r - target.r;
+      return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr)) <= 1;
+    });
+    ball.charge = 0;
+    state.explosions.push({x: target.x, y: target.y, radius: target.size * 3.1, age: 0, ttl: .58});
+    if (state.explosions.length > 18) state.explosions.shift();
+    scatterParticles(target.x, target.y, '#ffe98f', 42, 235);
+    floatText(target.x, target.y - 29, '¡SOBRECARGA!', '#ffe48a', 25);
+    state.shake = Math.max(state.shake, 15);
+    state.flash = Math.max(state.flash, .65);
+    audioTone(105, .33, 'sawtooth', .075, -57);
+    audioTone(680, .32, 'triangle', .08, -320);
+    for (const brick of neighbors) {
+      if (state.mode !== 'playing') break;
+      destroyBrick(brick, brick.x, brick.y);
+    }
+  }
+
   function distanceToHex(ball, brick) {
     let min = Infinity, nx = 0, ny = 0;
     const vertices = brick.vertices;
@@ -250,27 +273,24 @@
       if (Math.abs(ball.x - brick.x) > reach || Math.abs(ball.y - brick.y) > reach) continue;
       const normal = distanceToHex(ball, brick);
       if (!normal) continue;
-      if (pierce) {
-        if (ball.hitIds.has(brick.id)) continue;
-        ball.hitIds.add(brick.id);
-        hitBrick(brick, ball.x, ball.y, 1);
-        // Piercing moves continuously through the tile, never reflecting.
-      } else {
-        if (ball.lastBrick === brick.id && state.time - ball.lastBrickAt < .065) return;
-        ball.lastBrick = brick.id; ball.lastBrickAt = state.time;
-        hitBrick(brick, ball.x, ball.y, 1);
-        ball.x = prevX; ball.y = prevY;
-        const dot = ball.vx * normal.x + ball.vy * normal.y;
-        if (dot < 0) {
-          ball.vx -= 2 * dot * normal.x;
-          ball.vy -= 2 * dot * normal.y;
-        } else { ball.vx = -ball.vx; ball.vy = -ball.vy; }
-        // Avoid near-parallel lockups at vertices.
-        if (magnitude(ball.vx, ball.vy) < 5) ball.vx = 1;
-        normalizeBall(ball);
-        return;
-      }
+      if (pierce && ball.hitIds.has(brick.id)) continue;
+      if (!pierce && ball.lastBrick === brick.id && state.time - ball.lastBrickAt < .065) return;
+      ball.flightTouchedBrick = true;
+      if (pierce) ball.hitIds.add(brick.id);
+      else { ball.lastBrick = brick.id; ball.lastBrickAt = state.time; }
+      if (ball.charge >= MAX_CHARGE) detonateBall(ball, brick);
+      else hitBrick(brick, ball.x, ball.y, 1);
       if (state.mode !== 'playing') return;
+      if (pierce) continue;
+      ball.x = prevX; ball.y = prevY;
+      const dot = ball.vx * normal.x + ball.vy * normal.y;
+      if (dot < 0) {
+        ball.vx -= 2 * dot * normal.x;
+        ball.vy -= 2 * dot * normal.y;
+      } else { ball.vx = -ball.vx; ball.vy = -ball.vy; }
+      if (magnitude(ball.vx, ball.vy) < 5) ball.vx = 1;
+      normalizeBall(ball);
+      return;
     }
   }
   function paddleAngles() { return hasPower('D') ? [state.paddle, wrap(state.paddle + Math.PI)] : [state.paddle]; }
@@ -285,6 +305,17 @@
   function bounceBall(ball, angle, captured) {
     ball.x = Math.cos(angle) * (ORBIT - 11 * PIECE_SCALE);
     ball.y = Math.sin(angle) * (ORBIT - 11 * PIECE_SCALE);
+    if (ball.flightStarted && !ball.flightTouchedBrick && ball.charge < MAX_CHARGE) {
+      ball.charge++;
+      const full = ball.charge === MAX_CHARGE;
+      const color = full ? '#ffe68e' : '#ff9ee5';
+      floatText(ball.x, ball.y - 20, full ? '¡CARGA MÁXIMA!' : 'ENERGÍA ' + ball.charge + '/5', color, full ? 23 : 16);
+      scatterParticles(ball.x, ball.y, color, full ? 26 : 9, full ? 180 : 100);
+      audioTone(full ? 820 : 330 + ball.charge * 95, full ? .23 : .12, 'triangle', .055, 160);
+    }
+    ball.flightStarted = true;
+    ball.flightTouchedBrick = false;
+    ball.hitIds.clear();
     const impact = clamp(captured.delta / (paddleWidth() / 2), -.99, .99);
     if (hasPower('C')) {
       ball.stuck = true;
@@ -367,6 +398,9 @@
       ball.vx = -Math.cos(angle + offset) * ball.speed;
       ball.vy = -Math.sin(angle + offset) * ball.speed;
       ball.stuck = false;
+      ball.flightStarted = true;
+      ball.flightTouchedBrick = false;
+      ball.hitIds.clear();
       normalizeBall(ball);
       launched = true;
       scatterParticles(ball.x, ball.y, '#76ffff', 6, 65);
@@ -455,6 +489,11 @@
       p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt;
       p.vx *= 1 - dt * 1.1; p.vy *= 1 - dt * 1.1;
       if (p.life >= p.ttl) state.particles.splice(i, 1);
+    }
+    for (let i = state.explosions.length - 1; i >= 0; i--) {
+      const e = state.explosions[i];
+      e.age += dt;
+      if (e.age >= e.ttl) state.explosions.splice(i, 1);
     }
     for (let i = state.floaters.length - 1; i >= 0; i--) {
       const f = state.floaters[i];
@@ -657,6 +696,12 @@
     ui.best.textContent = formatScore(state.best);
     ui.level.textContent = String(state.level).padStart(2, '0');
     ui.lives.textContent = Array.from({length: state.lives}, () => '◆').join(' ');
+    const maxCharge = state.balls.reduce((best, ball) => Math.max(best, ball.charge || 0), 0);
+    if (ui.chargeValue && ui.chargeStatus) {
+      ui.chargeValue.textContent = '▰'.repeat(maxCharge) + '▱'.repeat(MAX_CHARGE - maxCharge);
+      ui.chargeStatus.classList.toggle('charged', maxCharge === MAX_CHARGE);
+      ui.chargeStatus.title = 'Mayor carga entre las pelotas: ' + maxCharge + '/5';
+    }
     ui.pause.textContent = state.mode === 'paused' ? '▶' : 'Ⅱ';
     ui.pause.setAttribute('aria-label', state.mode === 'paused' ? 'Reanudar juego' : 'Pausar juego');
     const left = state.bricks.length;
@@ -813,26 +858,70 @@
     }
     ctx.restore();
   }
+  function drawExplosions() {
+    ctx.save(); ctx.translate(CENTER, CENTER);
+    for (const e of state.explosions) {
+      const t = Math.min(1, e.age / e.ttl);
+      const radius = e.radius * (1 - Math.pow(1 - t, 2.4));
+      ctx.save(); ctx.translate(e.x, e.y);
+      ctx.globalAlpha = 1 - t;
+      ctx.shadowColor = '#ffcf7f'; ctx.shadowBlur = 26 * (1 - t);
+      ctx.strokeStyle = '#fff2ba'; ctx.lineWidth = (5 - t * 4) * PIECE_SCALE;
+      ctx.beginPath(); ctx.arc(0, 0, radius, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = '#ff82dc'; ctx.lineWidth = 2 * PIECE_SCALE;
+      ctx.beginPath(); ctx.arc(0, 0, radius * .78, 0, TAU); ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        const a = i * TAU / 6 + state.visualTime * .3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * radius * .37, Math.sin(a) * radius * .37);
+        ctx.lineTo(Math.cos(a) * radius * 1.18, Math.sin(a) * radius * 1.18);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
   function drawBalls() {
     ctx.save(); ctx.translate(CENTER, CENTER);
     for (const ball of state.balls) {
       const piercing = ball.piercing || hasPower('P');
-      const color = piercing ? '#f3aaff' : '#b5fbff';
+      const charge = clamp(ball.charge || 0, 0, MAX_CHARGE);
+      const full = charge === MAX_CHARGE;
+      const color = full ? '#ffe497' : charge >= 3 ? '#ffa6ed' : charge ? '#8df5ff' : (piercing ? '#f3aaff' : '#b5fbff');
       if (ball.trail.length > 1) {
         ctx.beginPath();
         for (let i = 0; i < ball.trail.length; i++) {
           const p = ball.trail[i];
           if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
         }
-        ctx.strokeStyle = piercing ? '#dc8dff60' : '#59e6ff6c';
-        ctx.lineWidth = (piercing ? 4 : 3) * PIECE_SCALE; ctx.lineCap = 'round'; ctx.stroke();
+        ctx.strokeStyle = full ? '#ffe388b5' : charge ? '#fb9fdf88' : piercing ? '#dc8dff60' : '#59e6ff6c';
+        ctx.lineWidth = (piercing ? 4 : 3) * PIECE_SCALE + charge * .32;
+        ctx.lineCap = 'round'; ctx.stroke();
       }
-      ctx.shadowColor = color; ctx.shadowBlur = piercing ? 25 : 17;
+      ctx.shadowColor = color; ctx.shadowBlur = 17 + charge * 9;
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(ball.x, ball.y, piercing ? 6.7 * PIECE_SCALE : BALL_R, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r * (1 + charge * .09), 0, TAU); ctx.fill();
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 2.5 * PIECE_SCALE, 0, TAU); ctx.fill();
-      if (piercing) {
+      if (charge > 0) {
+        ctx.save(); ctx.translate(ball.x, ball.y);
+        ctx.rotate(state.visualTime * (full ? 2.8 : 1.4) + ball.glow);
+        const ringR = (12 + (full ? 2.5 * Math.sin(state.visualTime * 12 + ball.glow) : 0)) * PIECE_SCALE + charge * .8;
+        for (let i = 0; i < MAX_CHARGE; i++) {
+          const a = (i / MAX_CHARGE) * TAU;
+          ctx.beginPath(); ctx.arc(0, 0, ringR, a + .09, a + TAU / MAX_CHARGE - .16);
+          ctx.lineWidth = full ? 3 : 2.2;
+          ctx.strokeStyle = i < charge ? color : '#56718d55';
+          ctx.shadowColor = color; ctx.shadowBlur = i < charge ? 10 : 0;
+          ctx.stroke();
+        }
+        if (full) {
+          ctx.strokeStyle = '#fff9d7'; ctx.lineWidth = 1.6;
+          ctx.globalAlpha = .65 + .35 * Math.sin(state.visualTime * 15);
+          ctx.beginPath(); ctx.arc(0, 0, ringR + 5, 0, TAU); ctx.stroke();
+        }
+        ctx.restore();
+      } else if (piercing) {
         ctx.strokeStyle = '#f1b6ff8c'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(ball.x, ball.y, (10 + Math.sin(state.visualTime * 12 + ball.glow) * 2) * PIECE_SCALE, 0, TAU); ctx.stroke();
       }
@@ -892,6 +981,7 @@
     drawBackground();
     ctx.translate((Math.random() - .5) * state.shake, (Math.random() - .5) * state.shake);
     drawBricks();
+    drawExplosions();
     drawCapsules();
     drawShots();
     drawParticles();
