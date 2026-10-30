@@ -4,7 +4,9 @@
   const CENTER = 400;
   const ORBIT = 289;
   const WALL = 310;
-  const BALL_R = 5.8;
+  // Shrink game pieces, but preserve the orbit radius to create extra breathing room.
+  const PIECE_SCALE = 0.8;
+  const BALL_R = 5.8 * PIECE_SCALE;
   const HEX_PALETTE = ['#57edff', '#729dff', '#a58aff', '#fd74cd', '#ffd985'];
   const POWERS = {
     G: { label: 'EXPANSIÓN', color: '#55f5ff', duration: 20 },
@@ -31,7 +33,9 @@
     overlayFootnote: $('overlayFootnote'), primary: $('primaryBtn'),
     state: $('stateLabel'), progress: $('progressFill'), bricks: $('bricksLabel'),
     hint: $('centerHint'), active: $('activeItems'), activeCount: $('activeCount'),
-    caption: $('stageCaption')
+    caption: $('stageCaption'), settingsBtn: $('settingsBtn'),
+    settings: $('settingsOverlay'), settingsClose: $('settingsClose'), settingsDone: $('settingsDone'),
+    optionsHint: $('optionsHint')
   };
   const readStore = (key, fallback) => {
     try { const v = localStorage.getItem(key); return v == null ? fallback : v; }
@@ -39,10 +43,12 @@
   };
   const saveStore = (key, value) => { try { localStorage.setItem(key, String(value)); } catch {} };
   const bestStored = Number(readStore('radianoid-best-v1', '0')) || 0;
+  const preferredControl = readStore('radianoid-control-v2', 'follow');
   const state = {
     mode: 'intro', level: 1, score: 0, best: bestStored, lives: 3,
     time: 0, visualTime: 0, lastHud: -1, lastShot: -1, shotHeld: false,
     paddle: Math.PI / 2, targetPaddle: Math.PI / 2, keyboardDir: 0,
+    controlMode: preferredControl === 'horizontal' ? 'horizontal' : 'follow',
     paddleVelocity: 0, bricks: [], totalBricks: 0,
     balls: [], capsules: [], shots: [], particles: [], floaters: [],
     power: {}, shake: 0, flash: 0, combo: 0, lastBreak: -10,
@@ -60,7 +66,7 @@
   const magnitude = (x, y) => Math.hypot(x, y);
   const formatScore = n => Math.floor(n).toString().padStart(6, '0');
   const hasPower = key => Boolean(state.power[key] && state.power[key] > state.time);
-  const paddleWidth = () => hasPower('G') ? .87 : hasPower('T') ? .34 : .58;
+  const paddleWidth = () => (hasPower('G') ? .87 : hasPower('T') ? .34 : .58) * PIECE_SCALE;
   const ballSpeed = () => Math.min(475, 290 + (state.level - 1) * 21 + Math.floor(state.score / 1500) * 5);
 
   function resize() {
@@ -115,7 +121,7 @@
   }
   function buildLevel() {
     const ringCount = Math.min(3 + Math.floor((state.level - 1) / 2), 5);
-    const size = ringCount >= 5 ? 17.7 : ringCount === 4 ? 19 : 20.5;
+    const size = (ringCount >= 5 ? 17.7 : ringCount === 4 ? 19 : 20.5) * PIECE_SCALE;
     let id = 0;
     state.bricks = [];
     for (let q = -ringCount; q <= ringCount; q++) {
@@ -127,7 +133,7 @@
         const health = (dist === 0 ? 3 : dist === 1 && state.level > 1 ? 2 : 1)
           + (state.level > 3 && (q * 5 + r * 7 + state.level) % 9 === 0 ? 1 : 0);
         const color = HEX_PALETTE[(ringCount - dist + state.level - 1) % HEX_PALETTE.length];
-        state.bricks.push({ id: id++, x, y, size: size - 1.5, vertices: hexVertices(x, y, size - 1.5),
+        state.bricks.push({ id: id++, x, y, size: size - 1.5 * PIECE_SCALE, vertices: hexVertices(x, y, size - 1.5 * PIECE_SCALE),
           hp: health, maxHp: health, color, phase: random(0, TAU), ring: dist });
       }
     }
@@ -141,8 +147,8 @@
     const a = angle == null ? state.paddle : angle;
     const speed = ballSpeed();
     const ball = {
-      x: origin ? origin.x : Math.cos(a) * (ORBIT - 19),
-      y: origin ? origin.y : Math.sin(a) * (ORBIT - 19),
+      x: origin ? origin.x : Math.cos(a) * (ORBIT - 19 * PIECE_SCALE),
+      y: origin ? origin.y : Math.sin(a) * (ORBIT - 19 * PIECE_SCALE),
       vx: origin ? Math.cos(a) * speed : -Math.cos(a) * speed + random(-35, 35),
       vy: origin ? Math.sin(a) * speed : -Math.sin(a) * speed + random(-35, 35),
       r: BALL_R, stuck, stickSide: 0, speed, piercing, hitIds: new Set(),
@@ -277,8 +283,8 @@
     return null;
   }
   function bounceBall(ball, angle, captured) {
-    ball.x = Math.cos(angle) * (ORBIT - 11);
-    ball.y = Math.sin(angle) * (ORBIT - 11);
+    ball.x = Math.cos(angle) * (ORBIT - 11 * PIECE_SCALE);
+    ball.y = Math.sin(angle) * (ORBIT - 11 * PIECE_SCALE);
     const impact = clamp(captured.delta / (paddleWidth() / 2), -.99, .99);
     if (hasPower('C')) {
       ball.stuck = true;
@@ -322,8 +328,8 @@
       if (!state.balls.includes(ball)) continue;
       if (ball.stuck) {
         const a = state.paddle + ball.stickSide;
-        ball.x = Math.cos(a) * (ORBIT - 20);
-        ball.y = Math.sin(a) * (ORBIT - 20);
+        ball.x = Math.cos(a) * (ORBIT - 20 * PIECE_SCALE);
+        ball.y = Math.sin(a) * (ORBIT - 20 * PIECE_SCALE);
         ball.trail.length = 0;
         continue;
       }
@@ -337,7 +343,7 @@
         breakByBall(ball, oldX, oldY);
         if (state.mode !== 'playing') break;
         const r = magnitude(ball.x, ball.y);
-        if (r >= ORBIT - 7) {
+        if (r >= ORBIT - 7 * PIECE_SCALE) {
           const a = Math.atan2(ball.y, ball.x);
           const hit = catchAngle(a);
           if (hit) bounceBall(ball, a, hit);
@@ -373,7 +379,7 @@
     for (const a of paddleAngles()) {
       for (const off of [-paddleWidth() * .22, paddleWidth() * .22]) {
         const angle = a + off;
-        const start = ORBIT - 17;
+        const start = ORBIT - 17 * PIECE_SCALE;
         state.shots.push({x: Math.cos(angle) * start, y: Math.sin(angle) * start,
           vx: -Math.cos(angle) * 690, vy: -Math.sin(angle) * 690, ttl: 1.1});
       }
@@ -387,8 +393,8 @@
       s.x += s.vx * dt; s.y += s.vy * dt; s.ttl -= dt;
       let hit = false;
       for (const brick of state.bricks) {
-        if (Math.abs(s.x - brick.x) > brick.size + 4 || Math.abs(s.y - brick.y) > brick.size + 4) continue;
-        if (distanceToHex({x:s.x,y:s.y,r:4,vx:s.vx,vy:s.vy}, brick)) {
+        if (Math.abs(s.x - brick.x) > brick.size + 4 * PIECE_SCALE || Math.abs(s.y - brick.y) > brick.size + 4 * PIECE_SCALE) continue;
+        if (distanceToHex({x:s.x,y:s.y,r:4*PIECE_SCALE,vx:s.vx,vy:s.vy}, brick)) {
           hitBrick(brick, s.x, s.y, 1); hit = true; break;
         }
       }
@@ -437,7 +443,7 @@
       const c = state.capsules[i];
       c.x += c.vx * dt; c.y += c.vy * dt; c.life += dt; c.angle += c.spin * dt;
       const radius = magnitude(c.x, c.y);
-      if (radius >= ORBIT - 13) {
+      if (radius >= ORBIT - 13 * PIECE_SCALE) {
         if (catchAngle(Math.atan2(c.y, c.x)) && radius <= WALL + 18) collectCapsule(c);
         state.capsules.splice(i, 1);
       } else if (c.life > 7) state.capsules.splice(i, 1);
@@ -461,7 +467,9 @@
     const before = state.paddle;
     if (state.keyboardDir) state.targetPaddle = wrap(state.targetPaddle - state.keyboardDir * dt * 3.4);
     const delta = angleDiff(state.targetPaddle, state.paddle);
-    state.paddle = wrap(state.paddle + delta * Math.min(1, dt * 21));
+    state.paddle = state.controlMode === 'follow' && !state.keyboardDir
+      ? wrap(state.targetPaddle)
+      : wrap(state.paddle + delta * Math.min(1, dt * 21));
     state.paddleVelocity = angleDiff(state.paddle, before) / dt;
     state.shake = Math.max(0, state.shake - dt * 24);
     state.flash = Math.max(0, state.flash - dt * 1.8);
@@ -530,6 +538,43 @@
       state.mode = 'playing'; hideOverlay(); updateHud(true);
     }
   }
+  let resumeAfterOptions = false;
+  const controlRadios = Array.from(document.querySelectorAll('input[name="controlMode"]'));
+  function syncControlOptions() {
+    for (const radio of controlRadios) radio.checked = radio.value === state.controlMode;
+    ui.optionsHint.textContent = state.controlMode === 'follow'
+      ? 'El paddle apunta hacia el cursor desde el centro de la arena.'
+      : 'Desplazá el mouse a izquierda o derecha para recorrer los 360°.';
+  }
+  function openOptions() {
+    if (!ui.settings.hidden) return;
+    resumeAfterOptions = state.mode === 'playing';
+    if (resumeAfterOptions) togglePause();
+    state.keyboardDir = 0; state.shotHeld = false;
+    syncControlOptions();
+    ui.settings.hidden = false;
+    ui.settingsClose.focus();
+  }
+  function closeOptions() {
+    if (ui.settings.hidden) return;
+    ui.settings.hidden = true;
+    ui.settingsBtn.focus();
+    if (resumeAfterOptions && state.mode === 'paused') togglePause();
+    resumeAfterOptions = false;
+  }
+  ui.settingsBtn.addEventListener('click', openOptions);
+  ui.settingsClose.addEventListener('click', closeOptions);
+  ui.settingsDone.addEventListener('click', closeOptions);
+  ui.settings.addEventListener('pointerdown', event => {
+    if (event.target === ui.settings) closeOptions();
+  });
+  for (const radio of controlRadios) radio.addEventListener('change', () => {
+    if (!radio.checked) return;
+    state.controlMode = radio.value;
+    saveStore('radianoid-control-v2', state.controlMode);
+    syncControlOptions();
+  });
+  syncControlOptions();
   ui.pause.addEventListener('click', togglePause);
   ui.primary.addEventListener('click', () => {
     switch (state.mode) {
@@ -543,30 +588,45 @@
     launchStuck();
     shoot();
   }
+  function pointPaddleAtPointer(event) {
+    const rect = board.getBoundingClientRect();
+    if (event.pointerType === 'mouse') {
+      if (event.clientX < rect.left || event.clientX > rect.right ||
+          event.clientY < rect.top || event.clientY > rect.bottom) return;
+      if (state.controlMode === 'horizontal') {
+        const portion = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+        state.targetPaddle = wrap((.5 - portion) * TAU + Math.PI / 2);
+      } else {
+        const dx = event.clientX - (rect.left + rect.width / 2);
+        const dy = event.clientY - (rect.top + rect.height / 2);
+        if (Math.hypot(dx, dy) < rect.width * .025) return;
+        state.targetPaddle = Math.atan2(dy, dx);
+      }
+    } else if (state.touchMoving) {
+      state.targetPaddle = Math.atan2(event.clientY - rect.top - rect.height / 2,
+        event.clientX - rect.left - rect.width / 2);
+    }
+  }
   board.addEventListener('pointerdown', event => {
     if (event.target.closest('button') || state.mode !== 'playing') return;
     state.pointerDown = true;
-    if (event.pointerType !== 'mouse') {
-      state.touchMoving = true;
-      const rect = board.getBoundingClientRect();
-      state.targetPaddle = Math.atan2(event.clientY - rect.top - rect.height / 2, event.clientX - rect.left - rect.width / 2);
-    }
+    if (event.pointerType !== 'mouse') state.touchMoving = true;
+    pointPaddleAtPointer(event);
     state.shotHeld = true;
     interact();
   });
   window.addEventListener('pointermove', event => {
     if (state.mode !== 'playing') return;
-    const rect = board.getBoundingClientRect();
-    if (event.pointerType === 'mouse') {
-      const portion = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      state.targetPaddle = wrap((.5 - portion) * TAU + Math.PI / 2);
-    } else if (state.touchMoving) {
-      state.targetPaddle = Math.atan2(event.clientY - rect.top - rect.height / 2, event.clientX - rect.left - rect.width / 2);
-    }
+    pointPaddleAtPointer(event);
   });
   window.addEventListener('pointerup', () => { state.pointerDown = false; state.touchMoving = false; state.shotHeld = false; });
   window.addEventListener('pointercancel', () => { state.pointerDown = false; state.touchMoving = false; state.shotHeld = false; });
   window.addEventListener('keydown', event => {
+    if (!ui.settings.hidden) {
+      if (event.code === 'Escape') { event.preventDefault(); closeOptions(); }
+      return;
+    }
+    if (event.code === 'KeyO' && !event.repeat) { event.preventDefault(); openOptions(); return; }
     if (['ArrowLeft','ArrowRight','Space'].includes(event.code)) event.preventDefault();
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') state.keyboardDir = -1;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') state.keyboardDir = 1;
@@ -725,30 +785,30 @@
     ctx.save(); ctx.translate(CENTER, CENTER);
     const color = hasPower('E') ? '#ffe792' : hasPower('C') ? '#8affb1' : secondary ? '#bf9eff' : '#72f4ff';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = color + '1c'; ctx.lineWidth = 25;
+    ctx.strokeStyle = color + '1c'; ctx.lineWidth = 25 * PIECE_SCALE;
     ctx.shadowColor = color; ctx.shadowBlur = 22;
     arc(angle - width / 2, angle + width / 2, ORBIT); ctx.stroke();
-    ctx.strokeStyle = color + '80'; ctx.lineWidth = 15;
+    ctx.strokeStyle = color + '80'; ctx.lineWidth = 15 * PIECE_SCALE;
     ctx.shadowBlur = 24;
     arc(angle - width / 2, angle + width / 2, ORBIT); ctx.stroke();
-    ctx.strokeStyle = '#f5ffff'; ctx.lineWidth = 5;
+    ctx.strokeStyle = '#f5ffff'; ctx.lineWidth = 5 * PIECE_SCALE;
     ctx.shadowBlur = 14;
     arc(angle - width / 2, angle + width / 2, ORBIT); ctx.stroke();
-    ctx.lineWidth = 2.5; ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5 * PIECE_SCALE; ctx.strokeStyle = color;
     ctx.shadowBlur = 14;
-    arc(angle - width / 2, angle + width / 2, ORBIT - 10); ctx.stroke();
+    arc(angle - width / 2, angle + width / 2, ORBIT - 10 * PIECE_SCALE); ctx.stroke();
     ctx.shadowBlur = 0;
     for (const side of [-1, 1]) {
       const a = angle + side * width / 2;
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(Math.cos(a) * ORBIT, Math.sin(a) * ORBIT, 7, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(Math.cos(a) * ORBIT, Math.sin(a) * ORBIT, 7 * PIECE_SCALE, 0, TAU); ctx.fill();
     }
     if (hasPower('L')) {
       for (const side of [-1,1]) {
         const a = angle + side * width * .22;
-        const x = Math.cos(a) * (ORBIT - 15), y = Math.sin(a) * (ORBIT - 15);
+        const x = Math.cos(a) * (ORBIT - 15 * PIECE_SCALE), y = Math.sin(a) * (ORBIT - 15 * PIECE_SCALE);
         ctx.fillStyle = '#ffbf75'; ctx.shadowColor = '#ffbf75'; ctx.shadowBlur = 14;
-        ctx.beginPath(); ctx.arc(x, y, 4, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 4 * PIECE_SCALE, 0, TAU); ctx.fill();
       }
     }
     ctx.restore();
@@ -765,16 +825,16 @@
           if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
         }
         ctx.strokeStyle = piercing ? '#dc8dff60' : '#59e6ff6c';
-        ctx.lineWidth = piercing ? 4 : 3; ctx.lineCap = 'round'; ctx.stroke();
+        ctx.lineWidth = (piercing ? 4 : 3) * PIECE_SCALE; ctx.lineCap = 'round'; ctx.stroke();
       }
       ctx.shadowColor = color; ctx.shadowBlur = piercing ? 25 : 17;
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(ball.x, ball.y, piercing ? 6.7 : BALL_R, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, piercing ? 6.7 * PIECE_SCALE : BALL_R, 0, TAU); ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 2.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 2.5 * PIECE_SCALE, 0, TAU); ctx.fill();
       if (piercing) {
         ctx.strokeStyle = '#f1b6ff8c'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(ball.x, ball.y, 10 + Math.sin(state.visualTime * 12 + ball.glow) * 2, 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, (10 + Math.sin(state.visualTime * 12 + ball.glow) * 2) * PIECE_SCALE, 0, TAU); ctx.stroke();
       }
     }
     ctx.restore();
@@ -783,7 +843,7 @@
     ctx.save(); ctx.translate(CENTER, CENTER);
     for (const c of state.capsules) {
       const color = POWERS[c.letter].color;
-      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle);
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(PIECE_SCALE, PIECE_SCALE);
       ctx.shadowColor = color; ctx.shadowBlur = 19;
       ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.fillStyle = '#0b1a2d';
       ctx.beginPath(); ctx.moveTo(-11, -8); ctx.lineTo(8, -11); ctx.lineTo(12, 8); ctx.lineTo(-8, 11); ctx.closePath();
@@ -801,9 +861,9 @@
     for (const shot of state.shots) {
       const dir = magnitude(shot.vx, shot.vy) || 1;
       ctx.beginPath();
-      ctx.moveTo(shot.x - shot.vx / dir * 16, shot.y - shot.vy / dir * 16);
+      ctx.moveTo(shot.x - shot.vx / dir * 16 * PIECE_SCALE, shot.y - shot.vy / dir * 16 * PIECE_SCALE);
       ctx.lineTo(shot.x, shot.y);
-      ctx.strokeStyle = '#ffba73'; ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffba73'; ctx.lineWidth = 3 * PIECE_SCALE;
       ctx.shadowColor = '#ffae64'; ctx.shadowBlur = 18;
       ctx.stroke();
     }
