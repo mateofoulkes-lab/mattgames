@@ -19,9 +19,11 @@
     P: { label: 'PERFORANTE', color: '#e595ff', duration: 17 },
     M: { label: 'MULTIBOLA', color: '#6affd4' },
     H: { label: 'HIPER MULTIBOLA', color: '#ff7fdc' },
-    X: { label: 'CAOS PERFORANTE', color: '#fff087' }
+    X: { label: 'CAOS PERFORANTE', color: '#fff087' },
+    V: { label: '+1 VIDA', color: '#caff57' }
   };
   const POWER_POOL = ['G','G','G','D','D','E','E','C','C','L','L','P','P','M','M','H','H','X','T'];
+  const EXTRA_LIFE_CHANCE = 1 / 42; // ~1 life for every 42 fallen powerup capsules.
   const $ = id => document.getElementById(id);
   const canvas = $('game');
   const board = $('board');
@@ -186,7 +188,8 @@
   }
   function dropCapsule(brick) {
     if (Math.random() > Math.min(.35, .27 + state.level * .012)) return;
-    const letter = POWER_POOL[Math.floor(Math.random() * POWER_POOL.length)];
+    const letter = Math.random() < EXTRA_LIFE_CHANCE
+      ? 'V' : POWER_POOL[Math.floor(Math.random() * POWER_POOL.length)];
     const dir = random(0, TAU);
     const speed = random(85, 126);
     state.capsules.push({x: brick.x, y: brick.y, vx: Math.cos(dir) * speed,
@@ -458,7 +461,14 @@
     const letter = c.letter;
     const power = POWERS[letter];
     addScore(50);
-    if (letter === 'M') addMultiballs(2);
+    if (letter === 'V') {
+      state.lives += 1;
+      state.flash = Math.max(state.flash, .5);
+      state.shake = Math.max(state.shake, 10);
+      audioTone(940, .22, 'sine', .07, 260);
+      audioTone(1360, .33, 'triangle', .06, 310);
+    }
+    else if (letter === 'M') addMultiballs(2);
     else if (letter === 'H') addMultiballs(8);
     else if (letter === 'X') { addMultiballs(11, true); state.power.P = state.time + 17; }
     else {
@@ -467,7 +477,7 @@
       state.power[letter] = state.time + power.duration;
     }
     floatText(c.x, c.y, power.label, power.color, 17);
-    scatterParticles(c.x, c.y, power.color, 24, 135);
+    scatterParticles(c.x, c.y, power.color, letter === 'V' ? 55 : 24, letter === 'V' ? 195 : 135);
     state.shake = 7;
     playChord();
     updateHud(true);
@@ -714,7 +724,9 @@
     ui.score.textContent = formatScore(state.score);
     ui.best.textContent = formatScore(state.best);
     ui.level.textContent = String(state.level).padStart(2, '0');
-    ui.lives.textContent = Array.from({length: state.lives}, () => '◆').join(' ');
+    ui.lives.textContent = state.lives <= 3
+      ? Array.from({length: state.lives}, () => '◆').join(' ')
+      : '◆ ×' + state.lives;
     const maxCharge = state.balls.reduce((best, ball) => Math.max(best, ball.charge || 0), 0);
     if (ui.chargeValue && ui.chargeStatus) {
       ui.chargeValue.textContent = '▰'.repeat(maxCharge) + '▱'.repeat(MAX_CHARGE - maxCharge);
@@ -951,14 +963,35 @@
     ctx.save(); ctx.translate(CENTER, CENTER);
     for (const c of state.capsules) {
       const color = POWERS[c.letter].color;
-      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(PIECE_SCALE, PIECE_SCALE);
-      ctx.shadowColor = color; ctx.shadowBlur = 19;
-      ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.fillStyle = '#0b1a2d';
+      const extraLife = c.letter === 'V';
+      const pulse = extraLife ? 1 + Math.sin(state.visualTime * 11 + c.life) * .11 : 1;
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle);
+      ctx.scale(PIECE_SCALE * (extraLife ? 1.22 : 1) * pulse, PIECE_SCALE * (extraLife ? 1.22 : 1) * pulse);
+      if (extraLife) {
+        // Pulsating white-lime sunburst differentiates the rare life reward.
+        ctx.save(); ctx.rotate(-c.angle + state.visualTime * .9);
+        ctx.strokeStyle = '#efff9a'; ctx.lineWidth = 1.6;
+        ctx.shadowColor = '#dbff53'; ctx.shadowBlur = 22;
+        for (let i = 0; i < 8; i++) {
+          const angle = i * TAU / 8;
+          const len = 19 + Math.sin(state.visualTime * 9 + i) * 2.2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * 15, Math.sin(angle) * 15);
+          ctx.lineTo(Math.cos(angle) * len, Math.sin(angle) * len);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.shadowColor = color; ctx.shadowBlur = extraLife ? 39 : 19;
+      ctx.lineWidth = extraLife ? 2.8 : 2;
+      ctx.strokeStyle = extraLife ? '#f6ffc6' : color;
+      ctx.fillStyle = extraLife ? '#2e4c0c' : '#0b1a2d';
       ctx.beginPath(); ctx.moveTo(-11, -8); ctx.lineTo(8, -11); ctx.lineTo(12, 8); ctx.lineTo(-8, 11); ctx.closePath();
       ctx.fill(); ctx.stroke();
-      ctx.shadowBlur = 0; ctx.rotate(-c.angle);
+      ctx.shadowBlur = extraLife ? 16 : 0; ctx.rotate(-c.angle);
       ctx.font = '800 16px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(c.letter, 0, 0);
+      ctx.fillStyle = extraLife ? '#ffffff' : color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(c.letter, 0, 0);
       ctx.restore();
     }
     ctx.restore();
