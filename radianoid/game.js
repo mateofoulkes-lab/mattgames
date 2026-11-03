@@ -526,8 +526,9 @@
     else if (letter === 'H') addMultiballs(8);
     else if (letter === 'X') {
       addMultiballs(11, true);
+      const previousPiercingLevel = powerLevel('P');
       state.power.P = state.time + 17;
-      state.powerLevel.P = Math.max(1, state.powerLevel.P || 0);
+      state.powerLevel.P = Math.max(1, previousPiercingLevel);
     } else if (letter === 'C') {
       state.power.C = hasPower('C')
         ? Math.min(state.time + 40, state.power.C + 10) : state.time + 20;
