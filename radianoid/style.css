@@ -230,3 +230,23 @@
   .sidebar .power-list { grid-template-rows:repeat(11,minmax(0,1fr)); }
 }
 @media(max-width:720px) { .power-row.extra-life { grid-column:1/-1; } }
+
+/* v1.7 — Charging laser telemetry on the arena. */
+.laser-charge-status[hidden] { display:none!important; }
+.laser-charge-status {
+  position:absolute; top:38px; left:13px; z-index:3;
+  min-width:155px; max-width:min(220px,42%);
+  padding:9px 11px; border:1px solid #ffd27f80; border-radius:7px;
+  background:linear-gradient(125deg,#271c24e9,#101528df);
+  box-shadow:0 0 24px #ffb45c29; color:#ffe4a0;
+  font:700 10px/1.35 monospace; pointer-events:none; letter-spacing:.06em;
+}
+.laser-charge-status > span { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.laser-charge-status strong { font-size:13px; color:#fff8d9; }
+.laser-charge-track { overflow:hidden; width:100%; height:7px; margin:7px 0 4px;
+  background:#3b2b24; border:1px solid #8b6740; border-radius:12px; }
+.laser-charge-track > div { height:100%; width:0%; border-radius:inherit;
+  background:linear-gradient(90deg,#ffc168,#fff2a9,#ffffff);
+  box-shadow:0 0 12px #ffd783; transition:width .09s linear; }
+.laser-charge-status small { color:#cba77c; font-size:8px; }
+@media(max-width:420px){.laser-charge-status{top:25px;left:7px;min-width:120px;padding:6px 7px;font-size:8px}.laser-charge-status small{font-size:7px}}
