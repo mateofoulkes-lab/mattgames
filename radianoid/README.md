@@ -33,6 +33,7 @@ Con **5/5**, la bola brilla dorada. Su siguiente impacto rompe el ladrillo alcan
 | M | Triplica las bolas | Instantáneo |
 | H | Hipermultibola | Instantáneo |
 | X | Hipermultibola perforante | Instantáneo + perforación |
+| V | Vida extra (raro, verde-lima brillante) | +1 vida durante la partida |
 
 Los hexágonos, la pelota, la paleta y las cápsulas usan el 80% de su tamaño original; la órbita se mantiene a su radio anterior para ampliar la zona libre entre centro y paddle.
 
@@ -48,3 +49,7 @@ El área de juego y los paneles se ajustan a la altura visible de la ventana del
 ## Interfaz v1.5
 
 En el panel izquierdo, puntuación y récord ocupan filas independientes para que los números no se superpongan. En la arena, el cursor del sistema se sustituye por un punto pequeño con halo cian neón centrado en la posición real del mouse. Los botones y la pantalla de inicio conservan sus cursores normales.
+
+## Vida extra (v1.6)
+
+Nuevo power-up **V**: aparece en promedio en una de cada 42 cápsulas que efectivamente caen de un ladrillo, además de la probabilidad normal de que aparezca una cápsula. Más raro que cada una de las letras habituales. Tamaño ligeramente mayor, pulsación, rayos blancos y halo verde-lima. Al capturarlo otorga +1 vida inmediatamente; en el HUD aparece «◆ ×N» al superar tres vidas. No se modificaron las reglas de acumulación de los demás power-ups, pendientes de aprobación.
