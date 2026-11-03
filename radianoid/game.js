@@ -8,6 +8,7 @@
   const PIECE_SCALE = 0.8;
   const BALL_R = 5.8 * PIECE_SCALE;
   const MAX_CHARGE = 5;
+  const MAX_LASER_CHARGE = 2.8;
   const HEX_PALETTE = ['#57edff', '#729dff', '#a58aff', '#fd74cd', '#ffd985'];
   const POWERS = {
     G: { label: 'EXPANSIÓN', color: '#55f5ff', duration: 20 },
@@ -38,7 +39,8 @@
     hint: $('centerHint'), active: $('activeItems'), activeCount: $('activeCount'),
     caption: $('stageCaption'), chargeValue: $('chargeValue'), chargeStatus: $('chargeStatus'), settingsBtn: $('settingsBtn'),
     settings: $('settingsOverlay'), settingsClose: $('settingsClose'), settingsDone: $('settingsDone'),
-    optionsHint: $('optionsHint')
+    optionsHint: $('optionsHint'), laserChargeStatus: $('laserChargeStatus'),
+    laserChargeFill: $('laserChargeFill'), laserChargeLabel: $('laserChargeLabel')
   };
   const readStore = (key, fallback) => {
     try { const v = localStorage.getItem(key); return v == null ? fallback : v; }
@@ -49,12 +51,12 @@
   const preferredControl = readStore('radianoid-control-v2', 'follow');
   const state = {
     mode: 'intro', level: 1, score: 0, best: bestStored, lives: 3,
-    time: 0, visualTime: 0, lastHud: -1, lastShot: -1, shotHeld: false,
+    time: 0, visualTime: 0, lastHud: -1, lastShot: -1, shotHeld: false, laserCharge: 0,
     paddle: Math.PI / 2, targetPaddle: Math.PI / 2, keyboardDir: 0,
     controlMode: preferredControl === 'horizontal' ? 'horizontal' : 'follow',
-    paddleVelocity: 0, bricks: [], totalBricks: 0,
+    paddleVelocity: 0, elasticTail: 0, bricks: [], totalBricks: 0,
     balls: [], capsules: [], shots: [], particles: [], floaters: [], explosions: [],
-    power: {}, shake: 0, flash: 0, combo: 0, lastBreak: -10,
+    power: {}, powerLevel: {}, shake: 0, flash: 0, combo: 0, lastBreak: -10,
     stars: Array.from({ length: 95 }, () => ({
       x: Math.random() * 800, y: Math.random() * 800,
       size: .35 + Math.random() * 1.1, phase: Math.random() * TAU
@@ -69,7 +71,16 @@
   const magnitude = (x, y) => Math.hypot(x, y);
   const formatScore = n => Math.floor(n).toString().padStart(6, '0');
   const hasPower = key => Boolean(state.power[key] && state.power[key] > state.time);
-  const paddleWidth = () => (hasPower('G') ? .87 : hasPower('T') ? .34 : .58) * PIECE_SCALE;
+  const powerLevel = key => hasPower(key) ? (state.powerLevel[key] || 1) : 0;
+  const paddleWidth = () => {
+    const large = powerLevel('G');
+    return .58 * PIECE_SCALE * (large ? [1, 1.5, 1.7, 1.9][large] : hasPower('T') ? .34 / .58 : 1);
+  };
+  function elasticExtension() {
+    if (!hasPower('E')) return {side: 0, length: 0};
+    const max = powerLevel('E') >= 2 ? .62 : .37;
+    return {side: Math.sign(state.elasticTail) || 1, length: .09 + Math.min(max - .09, Math.abs(state.elasticTail))};
+  }
   const ballSpeed = () => Math.min(475, 290 + (state.level - 1) * 21 + Math.floor(state.score / 1500) * 5);
 
   function resize() {
@@ -142,7 +153,8 @@
     }
     state.totalBricks = state.bricks.length;
     state.balls = []; state.capsules = []; state.shots = []; state.particles = []; state.floaters = []; state.explosions = [];
-    state.power = {}; state.combo = 0; state.shake = 0;
+    state.power = {}; state.powerLevel = {}; state.combo = 0; state.shake = 0;
+    state.elasticTail = 0; state.laserCharge = 0; state.shotHeld = false;
     createBall(true);
     updateHud(true);
   }
@@ -282,7 +294,7 @@
       if (pierce) ball.hitIds.add(brick.id);
       else { ball.lastBrick = brick.id; ball.lastBrickAt = state.time; }
       if (ball.charge >= MAX_CHARGE) detonateBall(ball, brick);
-      else hitBrick(brick, ball.x, ball.y, 1);
+      else hitBrick(brick, ball.x, ball.y, powerLevel('P') >= 2 && brick.hp > 1 ? 2 : 1);
       if (state.mode !== 'playing') return;
       if (pierce) continue;
       ball.x = prevX; ball.y = prevY;
@@ -296,12 +308,21 @@
       return;
     }
   }
-  function paddleAngles() { return hasPower('D') ? [state.paddle, wrap(state.paddle + Math.PI)] : [state.paddle]; }
+  function paddleAngles() {
+    const count = powerLevel('D') ? Math.min(8, powerLevel('D') * 2) : 1;
+    return Array.from({length: count}, (_, i) => wrap(state.paddle + i * TAU / count));
+  }
   function catchAngle(angle) {
     const width = paddleWidth();
+    const {side, length} = elasticExtension();
     for (const a of paddleAngles()) {
       const delta = angleDiff(angle, a);
-      if (Math.abs(delta) <= width / 2 + .026) return {a, delta};
+      if (Math.abs(delta) <= width / 2 + .026) return {a, delta, tail: false};
+      // Elastic wake trails behind the paddle's direction of rotation.
+      const behind = -delta * side;
+      if (length && behind > width / 2 && behind <= width / 2 + length) {
+        return {a, delta: clamp(delta, -width/2, width/2), tail: true};
+      }
     }
     return null;
   }
@@ -322,22 +343,22 @@
     const impact = clamp(captured.delta / (paddleWidth() / 2), -.99, .99);
     if (hasPower('C')) {
       ball.stuck = true;
-      ball.stickSide = Math.abs(angleDiff(captured.a, state.paddle)) > 1 ? Math.PI : 0;
+      ball.stickSide = angleDiff(captured.a, state.paddle);
       ball.trail.length = 0;
       audioTone(480, .12, 'sine', .05, -200);
       return;
     }
-    const elastic = hasPower('E');
     const normalX = -Math.cos(angle), normalY = -Math.sin(angle);
     const tangentX = -Math.sin(angle), tangentY = Math.cos(angle);
-    const turn = impact * (elastic ? 1.02 : .80) + (elastic ? clamp(state.paddleVelocity / 14, -.2, .2) : 0);
-    ball.vx = normalX * 1 + tangentX * turn;
-    ball.vy = normalY * 1 + tangentY * turn;
-    ball.speed = clamp(ball.speed * (elastic ? 1.13 : 1.019), 235, elastic ? 600 : 520);
+    const turn = impact * .80;
+    ball.vx = normalX + tangentX * turn;
+    ball.vy = normalY + tangentY * turn;
+    // E affects the paddle's physical wake, never the ball's speed/elasticity.
+    ball.speed = clamp(ball.speed * 1.019, 235, 520);
     normalizeBall(ball);
-    scatterParticles(ball.x, ball.y, elastic ? '#ffdd86' : '#61ebff', 6, 80);
-    state.shake = Math.max(state.shake, elastic ? 5 : 2.4);
-    audioTone(elastic ? 590 : 380, .1, elastic ? 'sawtooth' : 'sine', .045, 220);
+    scatterParticles(ball.x, ball.y, captured.tail ? '#ffdd86' : '#61ebff', captured.tail ? 14 : 6, 80);
+    state.shake = Math.max(state.shake, captured.tail ? 4.5 : 2.4);
+    audioTone(captured.tail ? 590 : 380, .1, captured.tail ? 'triangle' : 'sine', .045, 220);
   }
   function loseBall(ball) {
     const index = state.balls.indexOf(ball);
@@ -348,7 +369,8 @@
     state.shake = 8;
     if (state.balls.length > 0) return;
     state.lives--;
-    state.power = {}; state.shots = []; state.capsules = [];
+    state.power = {}; state.powerLevel = {}; state.shots = []; state.capsules = [];
+    state.shotHeld = false; state.laserCharge = 0; state.elasticTail = 0;
     if (state.lives <= 0) finishGame();
     else {
       createBall(true);
@@ -418,24 +440,57 @@
         const angle = a + off;
         const start = ORBIT - 17 * PIECE_SCALE;
         state.shots.push({x: Math.cos(angle) * start, y: Math.sin(angle) * start,
-          vx: -Math.cos(angle) * 690, vy: -Math.sin(angle) * 690, ttl: 1.1});
+          vx: -Math.cos(angle) * 690, vy: -Math.sin(angle) * 690, ttl: 1.1,
+          damage: 1, radius: 4 * PIECE_SCALE, pierces: 0, hitIds: new Set()});
       }
     }
     scatterParticles(Math.cos(state.paddle) * ORBIT, Math.sin(state.paddle) * ORBIT, '#ffbd75', 3, 80);
     audioTone(760, .07, 'square', .025, -330);
   }
+  function fireChargedLaser(seconds) {
+    if (!hasPower('L')) return;
+    const ratio = clamp(seconds / MAX_LASER_CHARGE, 0, 1);
+    if (seconds < .13) { shoot(); return; }
+    const damage = 1 + Math.floor(ratio * 4.9);
+    const pierces = Math.floor(ratio * 3.1);
+    const radius = (5 + ratio * 11) * PIECE_SCALE;
+    for (const angle of paddleAngles()) {
+      const start = ORBIT - 18 * PIECE_SCALE;
+      state.shots.push({x: Math.cos(angle) * start, y: Math.sin(angle) * start,
+        vx: -Math.cos(angle) * (720 + ratio * 160), vy: -Math.sin(angle) * (720 + ratio * 160),
+        ttl: 1.15, damage, radius, pierces, hitIds: new Set(), charged: true, power: ratio});
+    }
+    const px = Math.cos(state.paddle) * ORBIT, py = Math.sin(state.paddle) * ORBIT;
+    floatText(px, py, 'LÁSER ×' + damage, '#fff2ab', 20 + ratio * 9);
+    scatterParticles(px, py, '#ffdb78', 15 + Math.round(ratio * 25), 170);
+    state.shake = Math.max(state.shake, 6 + ratio * 8);
+    audioTone(310 + ratio * 260, .24 + ratio * .16, 'sawtooth', .065, 420);
+  }
+  function releaseLaserInput(fire = true) {
+    if (fire && state.shotHeld && state.mode === 'playing' && powerLevel('L') >= 2) {
+      fireChargedLaser(state.laserCharge);
+    }
+    state.shotHeld = false;
+    state.laserCharge = 0;
+  }
   function updateShots(dt) {
     for (let i = state.shots.length - 1; i >= 0; i--) {
-      const s = state.shots[i];
-      s.x += s.vx * dt; s.y += s.vy * dt; s.ttl -= dt;
-      let hit = false;
+      const shot = state.shots[i];
+      shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.ttl -= dt;
+      let consumed = false;
+      const radius = shot.radius || 4 * PIECE_SCALE;
       for (const brick of state.bricks) {
-        if (Math.abs(s.x - brick.x) > brick.size + 4 * PIECE_SCALE || Math.abs(s.y - brick.y) > brick.size + 4 * PIECE_SCALE) continue;
-        if (distanceToHex({x:s.x,y:s.y,r:4*PIECE_SCALE,vx:s.vx,vy:s.vy}, brick)) {
-          hitBrick(brick, s.x, s.y, 1); hit = true; break;
-        }
+        if (shot.hitIds && shot.hitIds.has(brick.id)) continue;
+        if (Math.abs(shot.x - brick.x) > brick.size + radius ||
+            Math.abs(shot.y - brick.y) > brick.size + radius) continue;
+        if (!distanceToHex({x:shot.x,y:shot.y,r:radius,vx:shot.vx,vy:shot.vy}, brick)) continue;
+        if (shot.hitIds) shot.hitIds.add(brick.id);
+        hitBrick(brick, shot.x, shot.y, shot.damage || 1);
+        if (shot.pierces > 0) { shot.pierces--; }
+        else { consumed = true; break; }
+        if (state.mode !== 'playing') break;
       }
-      if (hit || s.ttl <= 0 || magnitude(s.x, s.y) > WALL + 20) state.shots.splice(i, 1);
+      if (consumed || shot.ttl <= 0 || magnitude(shot.x, shot.y) > WALL + 20) state.shots.splice(i, 1);
       if (state.mode !== 'playing') break;
     }
   }
@@ -467,18 +522,32 @@
       state.shake = Math.max(state.shake, 10);
       audioTone(940, .22, 'sine', .07, 260);
       audioTone(1360, .33, 'triangle', .06, 310);
-    }
-    else if (letter === 'M') addMultiballs(2);
+    } else if (letter === 'M') addMultiballs(2);
     else if (letter === 'H') addMultiballs(8);
-    else if (letter === 'X') { addMultiballs(11, true); state.power.P = state.time + 17; }
-    else {
-      if (letter === 'G') delete state.power.T;
-      if (letter === 'T') delete state.power.G;
+    else if (letter === 'X') {
+      addMultiballs(11, true);
+      state.power.P = state.time + 17;
+      state.powerLevel.P = Math.max(1, state.powerLevel.P || 0);
+    } else if (letter === 'C') {
+      state.power.C = hasPower('C')
+        ? Math.min(state.time + 40, state.power.C + 10) : state.time + 20;
+      state.powerLevel.C = 1;
+    } else {
+      if (letter === 'G') { delete state.power.T; delete state.powerLevel.T; }
+      if (letter === 'T') { delete state.power.G; delete state.powerLevel.G; }
+      const caps = {G:3, T:1, E:2, D:4, L:2, P:2};
+      const old = powerLevel(letter);
+      state.powerLevel[letter] = Math.min(caps[letter] || 1, old + 1);
       state.power[letter] = state.time + power.duration;
+      if (letter === 'L') state.laserCharge = 0;
+      if (letter === 'E') state.elasticTail = 0;
     }
-    floatText(c.x, c.y, power.label, power.color, 17);
+    const level = powerLevel(letter);
+    const text = letter === 'V' ? '+1 VIDA'
+      : (level > 1 && ['G','E','D','L','P'].includes(letter) ? power.label + ' II' : power.label);
+    floatText(c.x, c.y, text, power.color, letter === 'V' ? 22 : 17);
     scatterParticles(c.x, c.y, power.color, letter === 'V' ? 55 : 24, letter === 'V' ? 195 : 135);
-    state.shake = 7;
+    state.shake = Math.max(state.shake, 7);
     playChord();
     updateHud(true);
   }
@@ -519,13 +588,21 @@
     state.paddle = state.controlMode === 'follow' && !state.keyboardDir
       ? wrap(state.targetPaddle)
       : wrap(state.paddle + delta * Math.min(1, dt * 21));
-    state.paddleVelocity = angleDiff(state.paddle, before) / dt;
+    const signedStep = angleDiff(state.paddle, before);
+    state.paddleVelocity = signedStep / dt;
+    if (hasPower('E')) {
+      const tailMax = powerLevel('E') >= 2 ? .53 : .28;
+      state.elasticTail = clamp(state.elasticTail * Math.exp(-dt * 5.5) + signedStep * .7, -tailMax, tailMax);
+    } else state.elasticTail = 0;
     state.shake = Math.max(0, state.shake - dt * 24);
     state.flash = Math.max(0, state.flash - dt * 1.8);
     for (const key of Object.keys(state.power)) {
-      if (!hasPower(key)) delete state.power[key];
+      if (!hasPower(key)) { delete state.power[key]; delete state.powerLevel[key]; }
     }
-    if (state.shotHeld) shoot();
+    if (state.shotHeld && hasPower('L')) {
+      if (powerLevel('L') >= 2) state.laserCharge = Math.min(MAX_LASER_CHARGE, state.laserCharge + dt);
+      else shoot();
+    } else if (!hasPower('L')) state.laserCharge = 0;
     updateBalls(dt);
     if (state.mode !== 'playing') return;
     updateShots(dt);
@@ -558,7 +635,7 @@
   function completeLevel() {
     if (state.mode !== 'playing') return;
     state.mode = 'level';
-    state.shotHeld = false;
+    releaseLaserInput(false);
     addScore(350 * state.level);
     showOverlay('SECTOR DESPEJADO', 'ÓRBITA<br><em>LIBERADA.</em>',
       'El núcleo cayó. Las próximas estructuras serán más resistentes. Tu energía sigue intacta.',
@@ -573,14 +650,14 @@
     playChord();
   }
   function finishGame() {
-    state.mode = 'gameover'; state.shotHeld = false;
+    state.mode = 'gameover'; releaseLaserInput(false);
     showOverlay('FIN DE TRANSMISIÓN', 'GAME<br><em>OVER.</em>',
       'Tu señal se perdió, pero el núcleo sigue esperando. Conseguí ' + formatScore(state.score) + ' puntos.',
       'VOLVER A JUGAR', 'MEJOR PUNTAJE: ' + formatScore(state.best), '✕');
   }
   function togglePause() {
     if (state.mode === 'playing') {
-      state.mode = 'paused'; state.shotHeld = false;
+      state.mode = 'paused'; releaseLaserInput(false);
       showOverlay('TRANSMISIÓN INTERRUMPIDA', 'EN<br><em>PAUSA.</em>',
         'La órbita está congelada. Retomá cuando quieras.', 'CONTINUAR', 'P O ESC PARA REANUDAR', 'Ⅱ');
     } else if (state.mode === 'paused') {
@@ -599,7 +676,7 @@
     if (!ui.settings.hidden) return;
     resumeAfterOptions = state.mode === 'playing';
     if (resumeAfterOptions) togglePause();
-    state.keyboardDir = 0; state.shotHeld = false;
+    state.keyboardDir = 0; releaseLaserInput(false);
     syncControlOptions();
     ui.settings.hidden = false;
     ui.settingsClose.focus();
@@ -635,7 +712,7 @@
   function interact() {
     if (state.mode !== 'playing') return;
     launchStuck();
-    shoot();
+    if (powerLevel('L') === 1) shoot();
   }
   function pointPaddleAtPointer(event) {
     const rect = board.getBoundingClientRect();
@@ -659,6 +736,7 @@
   function disableSticky() {
     if (state.mode !== 'playing' || !hasPower('C')) return;
     delete state.power.C;
+    delete state.powerLevel.C;
     // Cancel the sticky effect and release already captured balls.
     launchStuck();
     const x = Math.cos(state.paddle) * ORBIT;
@@ -681,14 +759,21 @@
     if (event.pointerType !== 'mouse') state.touchMoving = true;
     pointPaddleAtPointer(event);
     state.shotHeld = true;
+    state.laserCharge = 0;
     interact();
   });
   window.addEventListener('pointermove', event => {
     if (state.mode !== 'playing') return;
     pointPaddleAtPointer(event);
   });
-  window.addEventListener('pointerup', () => { state.pointerDown = false; state.touchMoving = false; state.shotHeld = false; });
-  window.addEventListener('pointercancel', () => { state.pointerDown = false; state.touchMoving = false; state.shotHeld = false; });
+  window.addEventListener('pointerup', event => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    state.pointerDown = false; state.touchMoving = false;
+    releaseLaserInput();
+  });
+  window.addEventListener('pointercancel', () => {
+    state.pointerDown = false; state.touchMoving = false; releaseLaserInput(false);
+  });
   window.addEventListener('keydown', event => {
     if (!ui.settings.hidden) {
       if (event.code === 'Escape') { event.preventDefault(); closeOptions(); }
@@ -698,9 +783,10 @@
     if (['ArrowLeft','ArrowRight','Space'].includes(event.code)) event.preventDefault();
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') state.keyboardDir = -1;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') state.keyboardDir = 1;
-    if (event.code === 'Space') {
-      if (!event.repeat && state.mode === 'playing') interact();
-      if (state.mode === 'playing') state.shotHeld = true;
+    if (event.code === 'Space' && !event.repeat && state.mode === 'playing') {
+      state.shotHeld = true;
+      state.laserCharge = 0;
+      interact();
     }
     if ((event.code === 'KeyP' || event.code === 'Escape') && !event.repeat) togglePause();
     if (event.code === 'Enter' && !event.repeat && state.mode !== 'playing') ui.primary.click();
@@ -708,10 +794,10 @@
   window.addEventListener('keyup', event => {
     if ((event.code === 'ArrowLeft' || event.code === 'KeyA') && state.keyboardDir < 0) state.keyboardDir = 0;
     if ((event.code === 'ArrowRight' || event.code === 'KeyD') && state.keyboardDir > 0) state.keyboardDir = 0;
-    if (event.code === 'Space') state.shotHeld = false;
+    if (event.code === 'Space') releaseLaserInput();
   });
   window.addEventListener('blur', () => {
-    state.keyboardDir = 0; state.shotHeld = false;
+    state.keyboardDir = 0; releaseLaserInput(false);
     if (state.mode === 'playing') togglePause();
   });
   document.addEventListener('visibilitychange', () => {
@@ -745,6 +831,15 @@
     ui.caption.innerHTML = 'SECTOR ' + String(state.level).padStart(2, '0') + ' <span>↗</span> ' + (state.mode === 'playing' ? 'EN VIVO' : 'STANDBY');
     const actives = Object.keys(state.power).filter(hasPower);
     ui.activeCount.textContent = String(actives.length).padStart(2, '0');
+    if (ui.laserChargeStatus) {
+      const charging = state.mode === 'playing' && powerLevel('L') >= 2 && state.shotHeld;
+      ui.laserChargeStatus.hidden = !charging;
+      if (charging) {
+        const pc = state.laserCharge / MAX_LASER_CHARGE * 100;
+        ui.laserChargeFill.style.width = pc.toFixed(0) + '%';
+        ui.laserChargeLabel.textContent = Math.round(pc) + '%';
+      }
+    }
     ui.active.replaceChildren();
     if (!actives.length) {
       const none = document.createElement('span');
@@ -754,8 +849,9 @@
       const node = document.createElement('span');
       node.className = 'active-token';
       node.style.setProperty('--token', POWERS[key].color);
-      node.textContent = key + ' ' + Math.ceil(state.power[key] - state.time) + 's';
-      node.title = POWERS[key].label;
+      const level = powerLevel(key);
+      node.textContent = key + (level > 1 ? '×' + level : '') + ' ' + Math.ceil(state.power[key] - state.time) + 's';
+      node.title = POWERS[key].label + (level > 1 ? ' · nivel ' + level : '');
       ui.active.append(node);
     }
   }
@@ -861,6 +957,29 @@
     ctx.save(); ctx.translate(CENTER, CENTER);
     const color = hasPower('E') ? '#ffe792' : hasPower('C') ? '#8affb1' : secondary ? '#bf9eff' : '#72f4ff';
     ctx.lineCap = 'round';
+    const wake = elasticExtension();
+    if (wake.length) {
+      // Real collision-active elastic wake: grows with angular movement, fades at rest.
+      const tailStart = wake.side > 0 ? angle - width/2 - wake.length : angle + width/2;
+      const tailEnd = wake.side > 0 ? angle - width/2 : angle + width/2 + wake.length;
+      for (let i = 0; i < 7; i++) {
+        const t0 = i / 7, t1 = (i + 1) / 7;
+        const p = wake.side > 0 ? t0 : (1 - t1);
+        const q = wake.side > 0 ? t1 : (1 - t0);
+        const a = tailStart + (tailEnd - tailStart) * p;
+        const b = tailStart + (tailEnd - tailStart) * q;
+        ctx.strokeStyle = 'rgba(255,222,133,' + (.10 + t1 * .75).toFixed(2) + ')';
+        ctx.lineWidth = (5 + t1 * 12) * PIECE_SCALE;
+        ctx.shadowColor = '#ffe792'; ctx.shadowBlur = 13 + t1 * 13;
+        arc(a, b, ORBIT); ctx.stroke();
+      }
+    }
+    if (powerLevel('L') >= 2 && state.shotHeld) {
+      const strength = state.laserCharge / MAX_LASER_CHARGE;
+      ctx.shadowColor = '#fff0a2'; ctx.shadowBlur = 15 + strength * 40;
+      ctx.strokeStyle = '#ffe9aa'; ctx.lineWidth = (3 + strength * 8) * PIECE_SCALE;
+      arc(angle - width/2, angle + width/2, ORBIT - 20*PIECE_SCALE); ctx.stroke();
+    }
     ctx.strokeStyle = color + '1c'; ctx.lineWidth = 25 * PIECE_SCALE;
     ctx.shadowColor = color; ctx.shadowBlur = 22;
     arc(angle - width / 2, angle + width / 2, ORBIT); ctx.stroke();
@@ -1001,12 +1120,21 @@
     ctx.lineCap = 'round';
     for (const shot of state.shots) {
       const dir = magnitude(shot.vx, shot.vy) || 1;
+      const size = shot.charged ? (9 + shot.power * 12) * PIECE_SCALE : 16 * PIECE_SCALE;
       ctx.beginPath();
-      ctx.moveTo(shot.x - shot.vx / dir * 16 * PIECE_SCALE, shot.y - shot.vy / dir * 16 * PIECE_SCALE);
+      ctx.moveTo(shot.x - shot.vx / dir * size, shot.y - shot.vy / dir * size);
       ctx.lineTo(shot.x, shot.y);
-      ctx.strokeStyle = '#ffba73'; ctx.lineWidth = 3 * PIECE_SCALE;
-      ctx.shadowColor = '#ffae64'; ctx.shadowBlur = 18;
+      ctx.strokeStyle = shot.charged ? '#fff5c5' : '#ffba73';
+      ctx.lineWidth = shot.charged ? shot.radius * 1.8 : 3 * PIECE_SCALE;
+      ctx.shadowColor = shot.charged ? '#ffdb64' : '#ffae64';
+      ctx.shadowBlur = shot.charged ? 28 + shot.power * 38 : 18;
       ctx.stroke();
+      if (shot.charged) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(2, shot.radius * .48);
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
