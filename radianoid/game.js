@@ -472,6 +472,7 @@
     }
     state.shotHeld = false;
     state.laserCharge = 0;
+    updateHud(true);
   }
   function updateShots(dt) {
     for (let i = state.shots.length - 1; i >= 0; i--) {
@@ -545,7 +546,7 @@
     }
     const level = powerLevel(letter);
     const text = letter === 'V' ? '+1 VIDA'
-      : (level > 1 && ['G','E','D','L','P'].includes(letter) ? power.label + ' II' : power.label);
+      : (level > 1 && ['G','E','D','L','P'].includes(letter) ? power.label + ' ×' + level : power.label);
     floatText(c.x, c.y, text, power.color, letter === 'V' ? 22 : 17);
     scatterParticles(c.x, c.y, power.color, letter === 'V' ? 55 : 24, letter === 'V' ? 195 : 135);
     state.shake = Math.max(state.shake, 7);
