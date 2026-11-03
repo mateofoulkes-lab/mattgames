@@ -7,8 +7,8 @@
   <meta name="description" content="Radianoid: el rompebloques de 360 grados, hexágonos neón y un arsenal de power-ups.">
   <title>RADIANOID — Neon Orbital Breaker</title>
   <link rel="icon" type="image/svg+xml" href="icon.svg">
-  <link rel="stylesheet" href="style.css?v=1.6.0">
-  <script src="game.js?v=1.6.0" defer></script>
+  <link rel="stylesheet" href="style.css?v=1.7.0">
+  <script src="game.js?v=1.7.0" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -56,6 +56,11 @@
           <canvas id="game" aria-label="Juego Radianoid: la paleta sigue la dirección del cursor. Clic para lanzar o disparar."></canvas>
           <div class="board-vignette" aria-hidden="true"></div>
           <div id="chargeStatus" class="charge-status" title="Carga máxima entre las pelotas"><small>SOBRECARGA · MÁX.</small><strong id="chargeValue">▱▱▱▱▱</strong></div>
+          <div id="laserChargeStatus" class="laser-charge-status" hidden>
+            <span>⚡ CARGANDO LÁSER <strong id="laserChargeLabel">0%</strong></span>
+            <div class="laser-charge-track"><div id="laserChargeFill"></div></div>
+            <small>SOLTÁ PARA DISPARAR</small>
+          </div>
           <div class="stage-caption" id="stageCaption">ARCADE SYSTEM <span>↗</span> READY</div>
           <div class="center-hint" id="centerHint">CLICK PARA LANZAR</div>
           <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
@@ -73,20 +78,20 @@
       <aside class="sidebar">
         <div class="panel-head"><span class="panel-kicker">// POWER SYSTEM</span><h2>MEJORAS<span>_</span></h2><p>Atrapá las cápsulas que salen disparadas desde los hexágonos.</p></div>
         <div class="power-list" id="powerList">
-          <div class="power-row"><b style="--p:#55f5ff">G</b><div><strong>EXPANSIÓN</strong><small>Paleta más grande</small></div></div>
-          <div class="power-row"><b style="--p:#ff6b9b">T</b><div><strong>REDUCCIÓN</strong><small>Paleta más chica</small></div></div>
-          <div class="power-row"><b style="--p:#f9dc7b">E</b><div><strong>ELÁSTICA</strong><small>Rebote turbo y control</small></div></div>
-          <div class="power-row"><b style="--p:#9c91ff">D</b><div><strong>DUAL</strong><small>Segunda paleta opuesta</small></div></div>
-          <div class="power-row"><b style="--p:#8dffb2">C</b><div><strong>CAPTURA</strong><small>Clic izq.: soltar · der.: cancelar</small></div></div>
-          <div class="power-row"><b style="--p:#ffbc75">L</b><div><strong>LÁSER</strong><small>Click sostenido para disparar</small></div></div>
-          <div class="power-row"><b style="--p:#e595ff">P</b><div><strong>PERFORANTE</strong><small>Las bolas atraviesan bricks</small></div></div>
+          <div class="power-row"><b style="--p:#55f5ff">G</b><div><strong>EXPANSIÓN</strong><small>Hasta 3 niveles (+50/70/90%)</small></div></div>
+          <div class="power-row"><b style="--p:#ff6b9b">T</b><div><strong>REDUCCIÓN</strong><small>No apila · cancela expansión</small></div></div>
+          <div class="power-row"><b style="--p:#f9dc7b">E</b><div><strong>ESTELA ELÁSTICA</strong><small>Cola que ataja · 2 niveles</small></div></div>
+          <div class="power-row"><b style="--p:#9c91ff">D</b><div><strong>MULTIPADDLE</strong><small>2 → 4 → 6 → 8 paletas</small></div></div>
+          <div class="power-row"><b style="--p:#8dffb2">C</b><div><strong>CAPTURA</strong><small>+10 s por C · máx. 40 s</small></div></div>
+          <div class="power-row"><b style="--p:#ffbc75">L</b><div><strong>LÁSER</strong><small>Nivel 2: mantené y soltá</small></div></div>
+          <div class="power-row"><b style="--p:#e595ff">P</b><div><strong>PERFORANTE</strong><small>Nivel 2: doble daño</small></div></div>
           <div class="power-row"><b style="--p:#6affd4">M</b><div><strong>MULTIBOLA</strong><small>Triple pelota</small></div></div>
           <div class="power-row"><b style="--p:#ff7fdc">H</b><div><strong>HIPER MULTIBOLA</strong><small>Lluvia de bolas</small></div></div>
           <div class="power-row"><b style="--p:#fff087">X</b><div><strong>CAOS PERFORANTE</strong><small>Hipermultibola que atraviesa</small></div></div>
           <div class="power-row extra-life"><b style="--p:#caff57">V</b><div><strong>VIDA EXTRA</strong><small>+1 vida · cápsula excepcional</small></div></div>
         </div>
         <div class="active-box"><div class="active-label"><span>EFECTOS ACTIVOS</span><span id="activeCount">00</span></div><div class="active-items" id="activeItems"><span class="no-effects">NINGÚN EFECTO ACTIVO</span></div></div>
-        <div class="howto"><div class="howto-header">GUÍA DE VUELO <span>↗</span></div><p>El paddle sigue al cursor. <kbd>←</kbd><kbd>→</kbd> o <kbd>A</kbd><kbd>D</kbd> también giran. <kbd>ESPACIO</kbd> o clic izquierdo para lanzar y disparar. Clic derecho cancela pegajoso. <kbd>P</kbd> pausa.</p><p class="subtle">Modo horizontal alternativo en ⚙ Opciones. En pantallas táctiles, arrastrá sobre la arena.</p></div>
+        <div class="howto"><div class="howto-header">GUÍA DE VUELO <span>↗</span></div><p>El paddle sigue al cursor. <kbd>←</kbd><kbd>→</kbd> o <kbd>A</kbd><kbd>D</kbd> también giran. <kbd>ESPACIO</kbd> o clic izquierdo para lanzar y disparar. Clic derecho cancela pegajoso. Con L×2, mantené y soltá para lanzar un láser cargado. <kbd>P</kbd> pausa.</p><p class="subtle">Modo horizontal alternativo en ⚙ Opciones. En pantallas táctiles, arrastrá sobre la arena.</p></div>
       </aside>
     </section>
   </main>
